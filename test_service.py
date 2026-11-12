@@ -1,6 +1,10 @@
 """Run with:  python test_service.py   (checks the server layer; engine tests: tests/engine/)"""
 import os
+import tempfile
 from fractions import Fraction as F
+
+os.environ.setdefault("FARAID_FILES_DIR", tempfile.mkdtemp(prefix="faraid_test_"))
+os.environ.setdefault("PUBLIC_BASE_URL", "https://example.test")
 
 from service import solve_munasakha, solve_simple
 from faraid.engine import FaraidError
@@ -51,6 +55,24 @@ assert m["jamia"] == 80 and all(v["ok"] for v in m["verification"])
 assert sum(p["parts"] for p in m["people"]) == 80
 assert round(sum(p["amount"] for p in m["people"]), 2) == 800.0
 print("OK  munasakha (ghaffar_80, jamia 80)")
+
+# Naqsha files: Excel + printable page (+ amounts row), both languages
+from files import find
+
+def served(url):
+    token, name = url.rsplit("/", 2)[-2:]
+    return find(token, name)
+
+m = solve_munasakha(text, estate=800, make_naqsha=True)
+x, h = served(m["files"]["excel_url"]), served(m["files"]["naqsha_page_url"])
+assert x and x.stat().st_size > 3000 and h and "<table" in h.read_text(encoding="utf-8")
+r = solve_simple({"wife": 1, "son": 2, "daughter": 1, "mother": 1}, estate=1_000_000, naqsha=True,
+                 lang="gu", names={"son": ["زید", "عمر"]}, deceased_name="احمد")
+page = served(r["files"]["naqsha_page_url"]).read_text(encoding="utf-8")
+assert "زید" in page and "1,000,000.00" in page and "566,666.67" not in page  # 2 sons = 283,333.33 each
+assert "283,333.33" in page
+assert find("../etc", "passwd") is None and find("x" * 30, "../x.xlsx") is None
+print("OK  naqsha files (Excel + page), link safety")
 
 # Bad input -> clear error
 for bad in ({}, {"husband": 1, "wife": 1}, {"wife": 5, "mother": 1}):

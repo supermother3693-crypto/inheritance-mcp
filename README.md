@@ -7,8 +7,13 @@ exposes two tools:
 
 | Tool | Use |
 |------|-----|
-| `calculate_inheritance` | one deceased person, heirs given as counts |
-| `calculate_munasakha` | several deaths in a row, text format (see `cases/*.txt`) |
+| `calculate_inheritance` | one deceased person, heirs given as counts; `create_naqsha=true` also makes the files below |
+| `calculate_munasakha` | several deaths in a row, text format (see `cases/*.txt`); makes the files below by default |
+
+Naqsha files (temporary private links, valid 24 hours, served at `/files/<token>/<name>`):
+the traditional naqsha as **Excel** (`render_xlsx.py`, optional rupee row) and as a **printable page**
+(`naqsha.py`) with a "Save as PDF" button. A direct **PDF** link is added only where LibreOffice
+is installed (`soffice`); plain Render Python does not have it, so use the page's button there.
 
 > A calculation aid, not a fatwa. Confirm the final division with a qualified mufti.
 > Not covered: dhawil-arham, unborn child, missing person, khuntha, mawla, impediments
@@ -17,7 +22,7 @@ exposes two tools:
 
 ## Files
 - `faraid/` – engine (`engine.py`, `parser.py`, `relations.py`)
-- `service.py`, `server.py` – MCP layer (streamable HTTP, endpoint `/mcp`, health `/health`)
+- `service.py`, `server.py`, `files.py`, `naqsha.py` – MCP layer (streamable HTTP, endpoint `/mcp`, health `/health`)
 - `cases/` – sample munasakha cases; `tests/engine/` – engine tests; `test_service.py` – server-layer tests
 
 ## Run and test

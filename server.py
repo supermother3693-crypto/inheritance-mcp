@@ -1,25 +1,53 @@
 """MCP server for the Faraid (Hanafi inheritance) engine.
 
 Tools:
-  calculate_inheritance  - one deceased person, heirs as counts
-  calculate_munasakha    - several deaths in a row, engine text format
+  calculate_inheritance  - one deceased person, heirs as counts (optional naqsha files)
+  calculate_munasakha    - several deaths in a row, engine text format (naqsha files by default)
+Downloads:
+  /files/<token>/<name>  - Excel, printable naqsha page, PDF (temporary, private link)
 """
 import os
 
 import uvicorn
 from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+from starlette.responses import FileResponse, PlainTextResponse
 
 from faraid.engine import FaraidError
+from files import MEDIA, find
 from service import solve_munasakha, solve_simple
 
 mcp = MCPServer("inheritance-hanafi")
+
+# tool parameter name -> engine relation code
+REL = {
+    "husband": "husband", "wife": "wife", "father": "father", "mother": "mother",
+    "grandfather": "grandfather", "grandmother_paternal": "grandmother_p",
+    "grandmother_maternal": "grandmother_m", "son": "son", "daughter": "daughter",
+    "grandson": "grandson", "granddaughter": "granddaughter",
+    "full_brother": "full_brother", "full_sister": "full_sister",
+    "consanguine_brother": "cons_brother", "consanguine_sister": "cons_sister",
+    "uterine_brother": "ut_brother", "uterine_sister": "ut_sister",
+    "full_nephew": "full_nephew", "consanguine_nephew": "cons_nephew",
+    "full_uncle": "full_uncle", "consanguine_uncle": "cons_uncle",
+    "full_cousin": "full_cousin", "consanguine_cousin": "cons_cousin",
+}
 
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request) -> PlainTextResponse:
     return PlainTextResponse("ok")
+
+
+@mcp.custom_route("/files/{token}/{name}", methods=["GET"])
+async def download(request: Request):
+    path = find(request.path_params["token"], request.path_params["name"])
+    if path is None:
+        return PlainTextResponse("فائل نہیں ملی یا لنک کی مدت (24 گھنٹے) ختم ہو گئی۔", status_code=404)
+    headers = {"Cache-Control": "private, no-store", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer"}
+    if path.suffix.lower() != ".html":
+        headers["Content-Disposition"] = f'attachment; filename="{path.name}"'
+    return FileResponse(path, media_type=MEDIA.get(path.suffix.lower(), "application/octet-stream"), headers=headers)
 
 
 @mcp.tool()
@@ -52,6 +80,11 @@ def calculate_inheritance(
     funeral_expenses: float = 0,
     debts: float = 0,
     bequest: float = 0,
+    create_naqsha: bool = False,
+    language: str = "ur",
+    title: str = "",
+    deceased_name: str = "",
+    names: dict[str, list[str]] | None = None,
 ) -> dict:
     """Islamic inheritance (faraid) for ONE deceased person, Hanafi fiqh.
 
@@ -64,23 +97,24 @@ def calculate_inheritance(
     nephew = brother's son, uncle = father's brother, cousin = uncle's son.
     Money is optional: estate, funeral_expenses, debts, bequest (wasiyyat, limited
     to one third of the net estate). Returns each heir's share as fraction, percent,
-    parts (sihaam) and amount, plus awl/radd/exclusion notes. Not a fatwa: confirm
-    with a qualified mufti.
+    parts (sihaam) and amount, plus awl/radd/exclusion notes.
+
+    create_naqsha = True also makes the traditional naqsha as an Excel file and a
+    printable page (with a "Save as PDF" button); the result then has a `files`
+    object with download links: show these links to the user. language = "ur" or
+    "gu" (Gujarati). title, deceased_name and names (e.g. {"son": ["Zaid", "Umar"]},
+    keys are the relation parameter names above) only decorate the naqsha.
+    Not a fatwa: confirm with a qualified mufti.
     """
-    counts = {
-        "husband": husband, "wife": wife, "father": father, "mother": mother,
-        "grandfather": grandfather, "grandmother_p": grandmother_paternal,
-        "grandmother_m": grandmother_maternal, "son": son, "daughter": daughter,
-        "grandson": grandson, "granddaughter": granddaughter,
-        "full_brother": full_brother, "full_sister": full_sister,
-        "cons_brother": consanguine_brother, "cons_sister": consanguine_sister,
-        "ut_brother": uterine_brother, "ut_sister": uterine_sister,
-        "full_nephew": full_nephew, "cons_nephew": consanguine_nephew,
-        "full_uncle": full_uncle, "cons_uncle": consanguine_uncle,
-        "full_cousin": full_cousin, "cons_cousin": consanguine_cousin,
-    }
+    args = locals()
+    counts = {REL[k]: args[k] for k in REL}
+    rel_names = {REL[k]: v for k, v in (names or {}).items() if k in REL}
     try:
-        return solve_simple(counts, deceased, estate, funeral_expenses, debts, bequest)
+        return solve_simple(
+            counts, deceased, estate, funeral_expenses, debts, bequest,
+            names=rel_names, deceased_name=deceased_name, naqsha=create_naqsha,
+            lang=language, title=title,
+        )
     except FaraidError as e:
         return {"error": str(e)}
 
@@ -92,10 +126,15 @@ def calculate_munasakha(
     funeral_expenses: float = 0,
     debts: float = 0,
     bequest: float = 0,
+    create_naqsha: bool = True,
+    language: str = "",
 ) -> dict:
     """Inheritance with several deaths in a row (munasakha), Hanafi fiqh.
 
     case_text uses the engine's simple text format, one block per death:
+
+        عنوان: نقشۂ مناسخہ          (optional title)
+        زبان: ur                    (optional: ur or gu)
 
         مورث: احمد | جنس: مرد
         بیوی: فاطمہ
@@ -111,10 +150,19 @@ def calculate_munasakha(
     people with the same name are written `نام#نشانی`. Relation words: بیوی، شوہر،
     باپ، ماں، دادا، دادی، نانی، بیٹا، بیٹی، پوتا، پوتی، بھائی، بہن، علاتی بھائی/بہن،
     اخیافی بھائی/بہن، بھتیجا، چچا، چچازاد. Returns the jamia (common total), every
-    person's final parts, fraction and amount, and a verification list. Not a fatwa.
+    person's final parts, fraction and amount, and a verification list.
+
+    By default (create_naqsha = True) it also makes the traditional naqsha with
+    ma fil yad, tashih, mazrub and the ladder of shares: an Excel file and a printable
+    page with a "Save as PDF" button. The result has a `files` object with download
+    links (valid 24 hours): show these links to the user. language = "ur" or "gu"
+    overrides the case's language. Not a fatwa: confirm with a qualified mufti.
     """
     try:
-        return solve_munasakha(case_text, estate, funeral_expenses, debts, bequest)
+        return solve_munasakha(
+            case_text, estate, funeral_expenses, debts, bequest,
+            make_naqsha=create_naqsha, lang=language or None,
+        )
     except FaraidError as e:
         return {"error": str(e)}
 
