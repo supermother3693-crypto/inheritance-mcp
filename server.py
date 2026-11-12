@@ -1,4 +1,9 @@
-"""MCP server exposing the `calculate_inheritance` tool (Hanafi fiqh)."""
+"""MCP server for the Faraid (Hanafi inheritance) engine.
+
+Tools:
+  calculate_inheritance  - one deceased person, heirs as counts
+  calculate_munasakha    - several deaths in a row, engine text format
+"""
 import os
 
 import uvicorn
@@ -6,7 +11,8 @@ from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
-from inheritance import InheritanceError, calculate
+from faraid.engine import FaraidError
+from service import solve_munasakha, solve_simple
 
 mcp = MCPServer("inheritance-hanafi")
 
@@ -18,59 +24,98 @@ async def health(_: Request) -> PlainTextResponse:
 
 @mcp.tool()
 def calculate_inheritance(
-    husband: bool = False,
-    wives: int = 0,
-    father: bool = False,
-    mother: bool = False,
-    paternal_grandfather: bool = False,
-    paternal_grandmother: bool = False,
-    maternal_grandmother: bool = False,
-    sons: int = 0,
-    daughters: int = 0,
-    grandsons: int = 0,
-    granddaughters: int = 0,
-    full_brothers: int = 0,
-    full_sisters: int = 0,
-    consanguine_brothers: int = 0,
-    consanguine_sisters: int = 0,
-    uterine_brothers: int = 0,
-    uterine_sisters: int = 0,
-    other_agnate: bool = False,
+    deceased: str = "",
+    husband: int = 0,
+    wife: int = 0,
+    father: int = 0,
+    mother: int = 0,
+    grandfather: int = 0,
+    grandmother_paternal: int = 0,
+    grandmother_maternal: int = 0,
+    son: int = 0,
+    daughter: int = 0,
+    grandson: int = 0,
+    granddaughter: int = 0,
+    full_brother: int = 0,
+    full_sister: int = 0,
+    consanguine_brother: int = 0,
+    consanguine_sister: int = 0,
+    uterine_brother: int = 0,
+    uterine_sister: int = 0,
+    full_nephew: int = 0,
+    consanguine_nephew: int = 0,
+    full_uncle: int = 0,
+    consanguine_uncle: int = 0,
+    full_cousin: int = 0,
+    consanguine_cousin: int = 0,
     estate: float = 0,
     funeral_expenses: float = 0,
     debts: float = 0,
     bequest: float = 0,
 ) -> dict:
-    """Calculate Islamic inheritance shares (faraid) according to Hanafi fiqh.
+    """Islamic inheritance (faraid) for ONE deceased person, Hanafi fiqh.
 
-    Give only the heirs who are ALIVE at the time of death; leave the rest at 0/False.
-    Heirs: husband OR wives (0-4), father, mother, paternal grandfather (dada),
-    paternal grandmother (father's mother), maternal grandmother (mother's mother),
-    sons, daughters, grandsons/granddaughters (children of a SON), full siblings,
-    consanguine siblings (same father), uterine siblings (same mother).
-    other_agnate = True if some other male-line relative exists (uncle, nephew...).
-
-    Money (optional): estate = total estate, funeral_expenses, debts, and bequest
-    (wasiyyat, capped at 1/3 of what remains). Returns each heir's fraction, percent,
-    parts and amount, plus notes on awl (proportional reduction), radd (return of
-    surplus) and heirs who are excluded. Not a fatwa: confirm with a qualified mufti.
+    Give only heirs who are alive at the time of death (counts; leave others 0).
+    deceased = "male" or "female" (optional: it is worked out from husband/wife, and
+    changes nothing when there is no spouse).
+    Relations: grandfather/grandmothers are the father's father, father's mother
+    (paternal) and mother's mother (maternal); grandson/granddaughter are children
+    of a SON; consanguine = same father only; uterine = same mother only;
+    nephew = brother's son, uncle = father's brother, cousin = uncle's son.
+    Money is optional: estate, funeral_expenses, debts, bequest (wasiyyat, limited
+    to one third of the net estate). Returns each heir's share as fraction, percent,
+    parts (sihaam) and amount, plus awl/radd/exclusion notes. Not a fatwa: confirm
+    with a qualified mufti.
     """
-    heirs = {
-        "husband": husband, "wives": wives, "father": father, "mother": mother,
-        "paternal_grandfather": paternal_grandfather,
-        "paternal_grandmother": paternal_grandmother,
-        "maternal_grandmother": maternal_grandmother,
-        "sons": sons, "daughters": daughters,
-        "grandsons": grandsons, "granddaughters": granddaughters,
-        "full_brothers": full_brothers, "full_sisters": full_sisters,
-        "consanguine_brothers": consanguine_brothers,
-        "consanguine_sisters": consanguine_sisters,
-        "uterine_brothers": uterine_brothers, "uterine_sisters": uterine_sisters,
-        "other_agnate": other_agnate,
+    counts = {
+        "husband": husband, "wife": wife, "father": father, "mother": mother,
+        "grandfather": grandfather, "grandmother_p": grandmother_paternal,
+        "grandmother_m": grandmother_maternal, "son": son, "daughter": daughter,
+        "grandson": grandson, "granddaughter": granddaughter,
+        "full_brother": full_brother, "full_sister": full_sister,
+        "cons_brother": consanguine_brother, "cons_sister": consanguine_sister,
+        "ut_brother": uterine_brother, "ut_sister": uterine_sister,
+        "full_nephew": full_nephew, "cons_nephew": consanguine_nephew,
+        "full_uncle": full_uncle, "cons_uncle": consanguine_uncle,
+        "full_cousin": full_cousin, "cons_cousin": consanguine_cousin,
     }
     try:
-        return calculate(heirs, estate, funeral_expenses, debts, bequest)
-    except InheritanceError as e:
+        return solve_simple(counts, deceased, estate, funeral_expenses, debts, bequest)
+    except FaraidError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def calculate_munasakha(
+    case_text: str,
+    estate: float = 0,
+    funeral_expenses: float = 0,
+    debts: float = 0,
+    bequest: float = 0,
+) -> dict:
+    """Inheritance with several deaths in a row (munasakha), Hanafi fiqh.
+
+    case_text uses the engine's simple text format, one block per death:
+
+        مورث: احمد | جنس: مرد
+        بیوی: فاطمہ
+        بیٹا: زید، عمر
+        بیٹی: مریم
+
+        مورث: زید
+        بیوی: سارہ
+        بیٹا: بکر
+
+    Rules: each block starts with `مورث:` (or `مورثہ:` for a woman); the deceased of
+    the 2nd block and later must be a heir named in an earlier block; two different
+    people with the same name are written `نام#نشانی`. Relation words: بیوی، شوہر،
+    باپ، ماں، دادا، دادی، نانی، بیٹا، بیٹی، پوتا، پوتی، بھائی، بہن، علاتی بھائی/بہن،
+    اخیافی بھائی/بہن، بھتیجا، چچا، چچازاد. Returns the jamia (common total), every
+    person's final parts, fraction and amount, and a verification list. Not a fatwa.
+    """
+    try:
+        return solve_munasakha(case_text, estate, funeral_expenses, debts, bequest)
+    except FaraidError as e:
         return {"error": str(e)}
 
 
