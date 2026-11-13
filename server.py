@@ -18,7 +18,16 @@ from faraid.engine import FaraidError
 from files import MEDIA, find
 from service import solve_munasakha, solve_simple
 
-mcp = MCPServer("inheritance-hanafi")
+INSTRUCTIONS = (
+    "Hanafi faraid (Islamic inheritance) calculator. ONE death -> calculate_inheritance. "
+    "Two or more deaths in a row (munasakha / 'teen batn'): a later deceased person is an heir of an "
+    "earlier one and died before the estate was divided -> call calculate_munasakha ONCE with every "
+    "block in a single case_text, so everything comes out in ONE naqsha with one jamia. Never call "
+    "calculate_inheritance once per death for a chain. An heir who died BEFORE the first deceased is not "
+    "an heir at all. If the order of deaths is unclear, ask the user which person died first. "
+    "Always show the download links from `files` to the user."
+)
+mcp = MCPServer("inheritance-hanafi", instructions=INSTRUCTIONS)
 
 # Pure calculators: nothing of the user's is changed anywhere. Clients such as ChatGPT use
 # these hints to treat the tools as read-only (no confirmation / allowed on read-only plans).
@@ -93,6 +102,10 @@ def calculate_inheritance(
 ) -> dict:
     """Islamic inheritance (faraid) for ONE deceased person, Hanafi fiqh.
 
+    Use this only when there is a single death. If an heir also died after the deceased and
+    before the estate was divided (munasakha, several generations / "teen batn"), do NOT call
+    this once per person: call calculate_munasakha once, which gives one combined naqsha.
+
     Give only heirs who are alive at the time of death (counts; leave others 0).
     deceased = "male" or "female" (optional: it is worked out from husband/wife, and
     changes nothing when there is no spouse).
@@ -134,7 +147,14 @@ def calculate_munasakha(
     create_naqsha: bool = True,
     language: str = "",
 ) -> dict:
-    """Inheritance with several deaths in a row (munasakha), Hanafi fiqh.
+    """Inheritance with several deaths in a row (munasakha), Hanafi fiqh: ONE call, ONE naqsha.
+
+    Use this whenever more than one person dies in a chain, e.g. grandfather -> his son -> that
+    son's son. Put ALL deaths in case_text as consecutive blocks; the engine carries each
+    person's share forward, gives one jamia and makes a single combined naqsha (one Excel file and
+    one page). Do not split the chain into separate calls. The order of blocks is the order of
+    death: the first block is the first person to die, and each later deceased must be an heir
+    named in an earlier block. A person who died before the first deceased is not an heir.
 
     case_text uses the engine's simple text format, one block per death:
 
