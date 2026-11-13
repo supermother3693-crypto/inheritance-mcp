@@ -12,9 +12,12 @@ import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 from starlette.requests import Request
-from starlette.responses import FileResponse, PlainTextResponse
+from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
 
 from faraid.engine import FaraidError
+from pathlib import Path
+
+import legal
 from files import MEDIA, find
 from service import solve_munasakha, solve_simple
 
@@ -51,6 +54,26 @@ REL = {
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request) -> PlainTextResponse:
     return PlainTextResponse("ok")
+
+
+@mcp.custom_route("/privacy", methods=["GET"])
+async def privacy(_: Request) -> HTMLResponse:
+    return HTMLResponse(legal.privacy())
+
+
+@mcp.custom_route("/terms", methods=["GET"])
+async def terms(_: Request) -> HTMLResponse:
+    return HTMLResponse(legal.terms())
+
+
+@mcp.custom_route("/support", methods=["GET"])
+async def support(_: Request) -> HTMLResponse:
+    return HTMLResponse(legal.support())
+
+
+@mcp.custom_route("/logo.png", methods=["GET"])
+async def logo(_: Request) -> FileResponse:
+    return FileResponse(Path(__file__).parent / "static" / "logo.png", media_type="image/png")
 
 
 @mcp.custom_route("/files/{token}/{name}", methods=["GET"])
