@@ -8,6 +8,7 @@ from __future__ import annotations
 from html import escape
 
 from openpyxl import load_workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.utils import get_column_letter as L
 
 FONT = 'Arial, "Noto Naskh Arabic", "Noto Nastaliq Urdu", "Noto Sans Gujarati", "Nirmala UI", sans-serif'
@@ -21,7 +22,7 @@ def _rgb(color) -> str | None:
 
 
 def sheet_to_html(xlsx_path: str, title: str = "") -> str:
-    wb = load_workbook(xlsx_path)
+    wb = load_workbook(xlsx_path, rich_text=True)
     ws = wb.active
     max_r, max_c = ws.max_row, ws.max_column
 
@@ -69,7 +70,21 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
             al = cell.alignment
             st.append("text-align:" + ("right" if al and al.horizontal == "right" else "center"))
             v = cell.value
-            text = "" if v is None else escape(str(v)).replace("\n", "<br>")
+            if isinstance(v, CellRichText):
+                text = ""
+                for part in v:
+                    if isinstance(part, TextBlock):
+                        f2 = part.font
+                        sup = getattr(f2, "vertAlign", None) == "superscript"
+                        css = f"font-size:{f2.sz or 11}pt;font-weight:{700 if f2.b else 400}"
+                        if f2.color is not None and getattr(f2.color, "rgb", None):
+                            css += f";color:#{str(f2.color.rgb)[-6:]}"
+                        tag = "sup" if sup else "span"
+                        text += f'<{tag} style="{css}">{escape(part.text)}</{tag}>'
+                    else:
+                        text += escape(str(part))
+            else:
+                text = "" if v is None else escape(str(v)).replace("\n", "<br>")
             attrs = (f' rowspan="{rs}"' if rs > 1 else "") + (f' colspan="{cs}"' if cs > 1 else "")
             tds.append(f'<td{attrs} style="{";".join(st)}">{text}</td>')
         rows_html.append(f'<tr style="height:{h:.0f}pt">{"".join(tds)}</tr>')
@@ -82,7 +97,7 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 <html lang="ur" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=6">
 <title>{page_title}</title>
 <style>
   body {{ margin: 0; font-family: {FONT}; background: #fff; }}
@@ -99,7 +114,7 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
   @media print {{
     .bar {{ display: none; }}
     .wrap {{ overflow: visible; padding: 0; }}
-    table {{ zoom: {zoom:.3f}; }}
+    table {{ zoom: {zoom:.3f} !important; }}
     * {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
   }}
 </style>
@@ -107,6 +122,9 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 <body>
 <div class="bar">
   <button onclick="window.print()">PDF محفوظ کریں / پرنٹ</button>
+  <button onclick="zoomBy(1.2)" aria-label="بڑا کریں">＋</button>
+  <button onclick="zoomBy(1/1.2)" aria-label="چھوٹا کریں">－</button>
+  <button onclick="fit()">پوری چوڑائی</button>
   <span>کھلنے والی ونڈو میں «Save as PDF» (PDF کے طور پر محفوظ کریں) چنیں۔ فون پر ٹیبل کو انگلیوں سے بڑا کر کے دیکھ سکتے ہیں۔</span>
 </div>
 <div class="wrap">
@@ -114,6 +132,15 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 {"".join(rows_html)}
 </table>
 </div>
+<script>
+const tb = document.querySelector('table');
+let z = 1;
+function setZ(v) {{ z = Math.max(0.15, Math.min(4, v)); tb.style.zoom = z; }}
+function zoomBy(k) {{ setZ(z * k); }}
+const W0 = {total_w:.0f};
+function fit() {{ setZ(Math.min(1.5, (document.documentElement.clientWidth - 20) / W0)); }}
+fit();
+</script>
 </body>
 </html>
 """

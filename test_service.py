@@ -82,3 +82,14 @@ for bad in ({}, {"husband": 1, "wife": 1}, {"wife": 5, "mother": 1}):
         continue
     raise AssertionError(f"should reject {bad}")
 print("OK  invalid input rejected\n\nAll service tests passed.")
+
+# Naqsha format upgrades: no dagger, dua + bataan labels, red dead-heir cell, dakhl/wafq side
+import openpyxl
+m = solve_munasakha(text, estate=0, make_naqsha=True)
+ws = openpyxl.load_workbook(served(m["files"]["excel_url"]), rich_text=True).active
+vals = [str(c.value) for r in ws.iter_rows() for c in r if c.value is not None]
+assert not any("†" in v or "(1)" in v for v in vals), "dagger / (1) must be gone"
+assert any(v == "بطن اول" for v in vals) and any(v == "بطن ثانی" for v in vals)
+assert any("رحمہ" in v or "نوّر" in v for v in vals)
+assert any(c.fill.fgColor.rgb.endswith("FFD6D6") for r in ws.iter_rows() for c in r if c.fill.fill_type == "solid")
+print("OK  naqsha format upgrades")
