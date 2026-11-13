@@ -56,6 +56,20 @@ async def health(_: Request) -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
+@mcp.custom_route("/", methods=["GET"])
+async def home(_: Request) -> HTMLResponse:
+    return HTMLResponse(legal.home())
+
+
+@mcp.custom_route("/.well-known/openai-apps-challenge", methods=["GET"])
+async def openai_challenge(_: Request):
+    """Domain verification for the ChatGPT app directory: token comes from env OPENAI_APPS_CHALLENGE."""
+    token = os.environ.get("OPENAI_APPS_CHALLENGE", "").strip()
+    if not token:
+        return PlainTextResponse("not set", status_code=404)
+    return PlainTextResponse(token)
+
+
 @mcp.custom_route("/privacy", methods=["GET"])
 async def privacy(_: Request) -> HTMLResponse:
     return HTMLResponse(legal.privacy())

@@ -78,3 +78,20 @@ def support() -> str:
 For several deaths in a row (munasakha) describe who died in which order.</p>"""
     ur = f"<p>سوال، خرابی یا فائل حذف کرنے کی درخواست: {_email()}</p>"
     return _page("Support", en, ur)
+
+
+def home() -> str:
+    en = """
+<p>Calculates Islamic inheritance (faraid) according to Hanafi fiqh: fixed shares, asaba, exclusion, awl, radd,
+Umariyyatayn, and several deaths in a row (munasakha) with one combined naqsha as Excel and a printable page.</p>
+<h2>Use it in ChatGPT or Claude</h2>
+<p>Add this MCP server URL as a custom connector (no sign-in needed):</p>
+<p><code>https://inheritance-mcp.onrender.com/mcp</code></p>
+<p>Then ask, for example: "Wife, two sons, one daughter and mother survive; estate 1,000,000; make the naqsha."</p>
+<p>Not a fatwa: confirm with a qualified mufti.</p>
+<p><a href='/privacy'>Privacy</a> · <a href='/terms'>Terms</a> · <a href='/support'>Support</a></p>"""
+    ur = """
+<p>حنفی فقہ کے مطابق وراثت (فرائض) اور مناسخہ کا حساب، ایکسل اور پرنٹ ہونے والے نقشے کے ساتھ۔
+اوپر دیا گیا MCP لنک ChatGPT یا Claude میں کسٹم کنیکٹر کے طور پر شامل کریں اور اپنا مسئلہ لکھیں۔
+یہ فتویٰ نہیں؛ مستند مفتی سے تصدیق کروائیں۔</p>"""
+    return _page("Faraid – Hanafi Inheritance Calculator", en, ur)
