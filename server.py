@@ -12,11 +12,12 @@ import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 from starlette.requests import Request
-from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 
 from faraid.engine import FaraidError
 from pathlib import Path
 
+import calculator
 import legal
 from files import MEDIA, find
 from service import solve_munasakha, solve_simple
@@ -68,6 +69,36 @@ async def openai_challenge(_: Request):
     if not token:
         return PlainTextResponse("not set", status_code=404)
     return PlainTextResponse(token)
+
+
+@mcp.custom_route("/calculator", methods=["GET"])
+async def calculator_page(_: Request) -> HTMLResponse:
+    return HTMLResponse(calculator.page())
+
+
+async def _api(request: Request, fn) -> JSONResponse:
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0].strip()
+    if not calculator.allowed(ip):
+        return JSONResponse({"error": "بہت زیادہ درخواستیں، ایک منٹ بعد کوشش کریں۔"}, status_code=429)
+    try:
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise ValueError
+        return JSONResponse(fn(data))
+    except FaraidError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception:
+        return JSONResponse({"error": "ان پٹ درست نہیں، دوبارہ جانچ لیں۔"}, status_code=400)
+
+
+@mcp.custom_route("/api/simple", methods=["POST"])
+async def api_simple(request: Request) -> JSONResponse:
+    return await _api(request, calculator.api_simple)
+
+
+@mcp.custom_route("/api/munasakha", methods=["POST"])
+async def api_munasakha(request: Request) -> JSONResponse:
+    return await _api(request, calculator.api_munasakha)
 
 
 @mcp.custom_route("/privacy", methods=["GET"])

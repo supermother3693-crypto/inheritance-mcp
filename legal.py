@@ -88,6 +88,7 @@ Umariyyatayn, and several deaths in a row (munasakha) with one combined naqsha a
 <p>Add this MCP server URL as a custom connector (no sign-in needed):</p>
 <p><code>https://inheritance-mcp.onrender.com/mcp</code></p>
 <p>Then ask, for example: "Wife, two sons, one daughter and mother survive; estate 1,000,000; make the naqsha."</p>
+<p><b><a href='/calculator'>Open the web calculator (no AI needed) / ویب کیلکولیٹر کھولیں</a></b></p>
 <p>Not a fatwa: confirm with a qualified mufti.</p>
 <p><a href='/privacy'>Privacy</a> · <a href='/terms'>Terms</a> · <a href='/support'>Support</a></p>"""
     ur = """
