@@ -10,6 +10,7 @@ import os
 
 import uvicorn
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import FileResponse, PlainTextResponse
 
@@ -18,6 +19,10 @@ from files import MEDIA, find
 from service import solve_munasakha, solve_simple
 
 mcp = MCPServer("inheritance-hanafi")
+
+# Pure calculators: nothing of the user's is changed anywhere. Clients such as ChatGPT use
+# these hints to treat the tools as read-only (no confirmation / allowed on read-only plans).
+CALC = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 
 # tool parameter name -> engine relation code
 REL = {
@@ -50,7 +55,7 @@ async def download(request: Request):
     return FileResponse(path, media_type=MEDIA.get(path.suffix.lower(), "application/octet-stream"), headers=headers)
 
 
-@mcp.tool()
+@mcp.tool(annotations=CALC)
 def calculate_inheritance(
     deceased: str = "",
     husband: int = 0,
@@ -119,7 +124,7 @@ def calculate_inheritance(
         return {"error": str(e)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=CALC)
 def calculate_munasakha(
     case_text: str,
     estate: float = 0,
