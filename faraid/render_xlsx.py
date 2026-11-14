@@ -213,7 +213,10 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                 else:
                     kind, m = ("تباین" if st["status"] == "tabayun" else "توافق"), st["reduced"]
                 note = f"{{رؤوس ⤴{st['u']}}} {kind} {{سہام ⤵{st['S']}}}  مضـ {m}"
-                val = corner_val(note, g["S"], c, span)
+                left = ""
+                if st["status"] == "tawafuq":      # وفق: اسی خانے کے بائیں اوپر کے کونے میں
+                    left = f"وفق {st['S'] // (st['u'] // st['reduced'])}"
+                val = corner_val(note, g["S"], c, span, small_left=left)
                 corner = True
                 any_note = True
             put(r_S, c, val, span, F(12), h=22, align=CORNER if corner else CEN)
