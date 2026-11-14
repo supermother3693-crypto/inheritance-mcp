@@ -52,11 +52,16 @@ def batan_name(i):
     return "بطن " + (BATAN[i] if i < len(BATAN) else str(i + 1))
 
 
-def mul_cell(a, b, prod):
-    """چھوٹے اوپر والے حرف میں «a×b» اور پھر عام حرف میں حاصلِ ضرب۔"""
-    small = InlineFont(rFont="Arial", sz=12, b=True, color="555555", vertAlign="superscript")
-    big = InlineFont(rFont="Arial", sz=13, b=True)
-    return CellRichText(TextBlock(small, f"\u200e{a}×{b} "), TextBlock(big, f"\u200e{prod}"))
+SMALL = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
+BIGF = InlineFont(rFont="Arial", sz=14, b=True)
+
+
+def corner_val(small, big, c, span):
+    """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا سا حساب اسی خانے میں دائیں اوپر کے کونے میں۔
+    c = منطقی کالم (1 = دائیں، تنگ کالم)، span = خانے کے کالم۔ بیچ میں لانے کے لیے خالی جگہیں ڈالی جاتی ہیں۔"""
+    px = sum((13 if cc == 1 else 17) * 7 + 5 for cc in range(c, c + span))      # خانے کی چوڑائی (پکسل)
+    pad = max(0, round((px - len(str(big)) * 10.4) / 2 / 5.2))                  # Arial 14 موٹا: عدد ≈10.4px، خالی جگہ ≈5.2px
+    return CellRichText(TextBlock(SMALL, small + "\n"), TextBlock(BIGF, str(big) + " " * pad))
 
 
 def build_xlsx(case, res, path, lang=None, amounts=None):
@@ -177,8 +182,6 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             put(r_nm, 1 + ci, h["name"], 1, F(12), h=34)
         # گروہ کی ضم شدہ لکیریں؛ سہام اور رؤوس کی نسبت اسی خانے میں چھوٹے حروف میں
         tkey = {st["key"]: st for st in b["tsteps"]}
-        small_ratio = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
-        big_s = InlineFont(rFont="Arial", sz=14, b=True)
         any_note = False
         c = 1
         for g in b["groups"]:
@@ -187,22 +190,16 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             put(r_kind, c, lab_k, span, F(12), FILL_F, h=24)
             st = tkey.get(g["key"])
             val = g["S"]
+            corner = False
             if st and st["u"] > 1:
                 if st["status"] == "divisible":
-                    note = f"{{رؤوس {st['u']}}} ↕ برابر ↕ {{سہام {st['S']}}}"
+                    kind, m = "برابر", 1
                 else:
-                    kind = "تباین" if st["status"] == "tabayun" else "توافق"
-                    note = f"{{رؤوس {st['u']}}} ↕ {kind} ↕ {{سہام {st['S']}}}  ⇒ {st['reduced']}"
-                # چھوٹا ٹیکسٹ اوپر دائیں کونے میں؛ بڑا عدد خالی جگہوں سے خانے کے بیچ میں لایا جاتا ہے
-                px = sum((13 if cc == 1 else 17) * 7 + 5 for cc in range(c, c + span))   # خانے کی چوڑائی (پکسل)
-                digits = len(str(g["S"]))
-                pad = max(0, round((px - digits * 10.4) / 2 / 5.2))        # Arial 14 موٹا: عدد ≈10.4px، خالی جگہ ≈5.2px
-                val = CellRichText(TextBlock(small_ratio, note + "\n"),
-                                   TextBlock(big_s, str(g["S"]) + " " * pad))
+                    kind, m = ("تباین" if st["status"] == "tabayun" else "توافق"), st["reduced"]
+                note = f"{{⤴رؤوس {st['u']}}} {kind} {{سہام⤵ {st['S']}}}  مضـ {m}"
+                val = corner_val(note, g["S"], c, span)
                 corner = True
                 any_note = True
-            else:
-                corner = False
             put(r_S, c, val, span, F(12), h=22, align=CORNER if corner else CEN)
             c += span
         if any_note:
@@ -212,7 +209,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             c = 1
             for g in b["groups"]:
                 span = len(g["members"])
-                put(r_fr, c, mul_cell(g["S"], b["mudrub"], g["S"] * b["mudrub"]), span, F(12), h=30)
+                put(r_fr, c, corner_val(f"\u200e{g['S']}×{b['mudrub']}", g["S"] * b["mudrub"], c, span), span, F(12), h=34, align=CORNER)
                 c += span
         # --- سیڑھی ---
         lad = ladders[bi]
