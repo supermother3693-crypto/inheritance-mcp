@@ -56,11 +56,11 @@ SMALL = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
 BIGF = InlineFont(rFont="Arial", sz=14, b=True)
 
 
-def corner_val(small, big, c, span):
+def corner_val(small, big, c, span, cw=10.4):
     """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا سا حساب اسی خانے میں دائیں اوپر کے کونے میں۔
     c = منطقی کالم (1 = دائیں، تنگ کالم)، span = خانے کے کالم۔ بیچ میں لانے کے لیے خالی جگہیں ڈالی جاتی ہیں۔"""
     px = sum((13 if cc == 1 else 17) * 7 + 5 for cc in range(c, c + span))      # خانے کی چوڑائی (پکسل)
-    pad = max(0, round((px - len(str(big)) * 10.4) / 2 / 5.2))                  # Arial 14 موٹا: عدد ≈10.4px، خالی جگہ ≈5.2px
+    pad = max(0, round((px - len(str(big)) * cw) / 2 / 5.2))                  # Arial 14 موٹا: عدد ≈10.4px، خالی جگہ ≈5.2px
     return CellRichText(TextBlock(SMALL, small + "\n"), TextBlock(BIGF, str(big) + " " * pad))
 
 
@@ -136,32 +136,37 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         else:
             asl_txt = str(b["asl"]) + (" رد" if b["radd"] else "")
         mid = ""
-        if b["mudrub"] > 1:
-            mid = f"{t['mazrub']} {b['mudrub']}"
-        if bi:
+        if bi:   # مضروب یہاں نہیں لکھتے؛ وہ مسئلے کے خانے کے کونے میں چھوٹا لکھا جاتا ہے
             rr = b["ratio"]
-            mid = (mid + "   " if mid else "") + f"{rr['name']}  (↑×{b['fJ']}  ↓×{b['fh']})"
+            mid = f"{rr['name']}  (↑×{b['fJ']}  ↓×{b['fh']})"
         used = 5 if mid else 2
         # سطر 1: دائیں مسئلہ (دخل/وفق)، بائیں ما في اليد (دخل/وفق)، اور مورث کے نام کے اوپر بطن کا نام
-        left_t = right_t = None
+        left_big = None
+        left_small = ""
+        right_small = []
         if bi:
             parts = b.get("m_parts", [])
-            left_t = f"{t['mafi']} {b['m']}" + (f"  ({' + '.join(str(v) for _, v in parts)})" if len(parts) > 1 else "")
+            left_big = f"{t['mafi']} {b['m']}" + (f"  ({' + '.join(str(v) for _, v in parts)})" if len(parts) > 1 else "")
             rr = b["ratio"]
             if rr["kind"] == "tadakhul":
                 q = max(rr["a"], rr["b"]) // min(rr["a"], rr["b"])
                 if rr["a"] < rr["b"]:           # ما في اليد چھوٹا: اس کا دخل بائیں، ما في اليد کے ساتھ
-                    left_t += f"  دخل {q}"
+                    left_small = f"دخل {q}"
                 else:                           # مسئلہ چھوٹا: اس کا دخل دائیں، مسئلے کے ساتھ
-                    right_t = f"{b['T']}  دخل {q}"
+                    right_small.append(f"دخل {q}")
             elif rr["kind"] == "tawafuq":       # دونوں کا وفق: ہر ایک کے ساتھ اپنی طرف
-                left_t += f"  وفق {b['fh']}"
-                right_t = f"{b['T']}  وفق {b['fJ']}"
+                left_small = f"وفق {b['fh']}"
+                right_small.append(f"وفق {b['fJ']}")
+        if b["mudrub"] > 1:                     # مضروب × مسئلہ: مسئلے کے خانے کے کونے میں
+            right_small.insert(0, f"\u200e{b['mudrub']}×{b['asl']}")
         r = nxt()
-        if left_t:
-            put(r, 2, left_t, used - 2, F(12), FILL_B, h=28)
-        if b["mudrub"] > 1 or right_t:
-            put(r, 1, right_t or b["T"], 1, F(12 if right_t else 13), h=28)
+        if left_big:
+            if left_small:
+                put(r, 2, corner_val(left_small, left_big, 2, used - 2, 8), used - 2, F(12), FILL_B, h=34, align=CORNER)
+            else:
+                put(r, 2, left_big, used - 2, F(12), FILL_B, h=28)
+        if right_small:
+            put(r, 1, corner_val("  ".join(right_small), b["T"], 1, 1), 1, F(12), h=34, align=CORNER)
         put(r, used, batan_name(bi), W - used + 1, F(12), FILL_B, h=28)
         # سطر 2: عنوان
         r = nxt()
@@ -196,7 +201,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                     kind, m = "برابر", 1
                 else:
                     kind, m = ("تباین" if st["status"] == "tabayun" else "توافق"), st["reduced"]
-                note = f"{{⤴رؤوس {st['u']}}} {kind} {{سہام⤵ {st['S']}}}  مضـ {m}"
+                note = f"\u202b{{رؤوس ⤴{st['u']}}} {kind} {{سہام ⤵{st['S']}}}  مضـ {m}\u202c"   # RTL ترتیب پکی
                 val = corner_val(note, g["S"], c, span)
                 corner = True
                 any_note = True
