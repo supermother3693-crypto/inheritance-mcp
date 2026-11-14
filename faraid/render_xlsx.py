@@ -34,6 +34,7 @@ thin = Side(style="thin", color="444444")
 BOX = Border(left=thin, right=thin, top=thin, bottom=thin)
 F = lambda sz=12, b=True, color="000000": Font(name="Arial", size=sz, bold=b, color=color)
 CEN = Alignment(horizontal="center", vertical="center", wrap_text=True, readingOrder=2)
+NOWRAP = Alignment(horizontal="center", vertical="center", wrap_text=False, readingOrder=2)
 CORNER = Alignment(horizontal="right", vertical="top", wrap_text=True)
 FILL_T = PatternFill("solid", fgColor="E8EEF7")
 FILL_B = PatternFill("solid", fgColor="FFF4D6")
@@ -112,9 +113,9 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
     for k in range(len(vals) - 1, -1, -1):
         r = nxt()
         has_f = k < len(facs) and k < len(vals) - 1
-        put(r, 1, vals[k], 1, F(14), FILL_B, h=30 if has_f else 22)
-        if has_f:   # ضرب کے ساتھ مختصر وجہ: کس بطن کی وجہ سے
-            put(r, W, f"× {facs[k][1]}\n{batan_name(facs[k][0])}", 1, F(10, False, "555555"), border=False)
+        put(r, 1, vals[k], 1, F(14), FILL_B, h=22)
+        if has_f:   # ضرب کے ساتھ مختصر وجہ: کس بطن کی وجہ سے (ایک ہی لائن میں)
+            put(r, W, f"× {facs[k][1]} / {batan_name(facs[k][0])}", 1, F(10, False, "555555"), border=False, align=NOWRAP)
     nxt()
 
     people = res["people"]
@@ -193,7 +194,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                     kind = "تباین" if st["status"] == "tabayun" else "توافق"
                     note = f"{{رؤوس {st['u']}}} ↕ {kind} ↕ {{سہام {st['S']}}}  ⇒ {st['reduced']}"
                 # چھوٹا ٹیکسٹ اوپر دائیں کونے میں؛ بڑا عدد خالی جگہوں سے خانے کے بیچ میں لایا جاتا ہے
-                px = sum((17 if cc < W else 13) * 7 + 5 for cc in range(c, c + span))   # خانے کی چوڑائی (پکسل)
+                px = sum((13 if cc == 1 else 17) * 7 + 5 for cc in range(c, c + span))   # خانے کی چوڑائی (پکسل)
                 digits = len(str(g["S"]))
                 pad = max(0, round((px - digits * 10.4) / 2 / 5.2))        # Arial 14 موٹا: عدد ≈10.4px، خالی جگہ ≈5.2px
                 val = CellRichText(TextBlock(small_ratio, note + "\n"),
@@ -229,7 +230,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                         FILL_R if dead else None, h=22, box=BOX_R if dead else None)
             if k >= 1:
                 kk, f, kind = lad["events"][k - 1]
-                put(r, W, f"× {f}\n{batan_name(kk)}", 1, F(10, False, "555555"), border=False, h=30)
+                put(r, W, f"× {f} / {batan_name(kk)}", 1, F(10, False, "555555"), border=False, align=NOWRAP)
         # --- نوٹس / وضاحت ---
         lines = []
         if b["tsteps"]:
@@ -299,12 +300,6 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         r = nxt()
         put(r, 1, "نوٹ: " + n, W, F(11), border=False, h=32,
             align=Alignment(horizontal="right", vertical="center", wrap_text=True, readingOrder=2))
-    nxt()
-    r = nxt()
-    put(r, 1, "علامات:  {n} سرخ خانہ = وہ وارث جو بعد میں فوت ہوا؛  × = ضرب (ساتھ وجہ: کس بطن کی وجہ سے)؛  "
-              "دخل / وفق = ما فی الید اور مسئلے کی نسبت؛  {رؤوس} ↕ {سہام} = افراد کی تعداد اور گروہ کے حصوں کی نسبت",
-        W, F(9, False, "555555"), border=False, h=30,
-        align=Alignment(horizontal="right", vertical="center", wrap_text=True, readingOrder=2))
     nxt()
     for ln in case.get("footer", []) or [t["last"]]:
         r = nxt()
