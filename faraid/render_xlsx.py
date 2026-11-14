@@ -56,12 +56,23 @@ SMALL = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
 BIGF = InlineFont(rFont="Arial", sz=14, b=True)
 
 
-def corner_val(small, big, c, span, cw=10.4):
-    """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا سا حساب اسی خانے میں دائیں اوپر کے کونے میں۔
-    c = منطقی کالم (1 = دائیں، تنگ کالم)، span = خانے کے کالم۔ بیچ میں لانے کے لیے خالی جگہیں ڈالی جاتی ہیں۔"""
+def _wpx(text, per=4.8):
+    """8pt چھوٹے ٹیکسٹ کی اندازاً چوڑائی (پکسل)۔"""
+    return sum(5.9 if ch.isdigit() else (2.96 if ch == " " else per) for ch in text) * 1.05
+
+
+def corner_val(small, big, c, span, cw=10.4, small_left=""):
+    """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا حساب اسی خانے میں دائیں اوپر کے کونے میں،
+    اور دخل/وفق (small_left) بائیں اوپر کے کونے میں۔ c = منطقی کالم (1 = دائیں، تنگ)، span = کالم۔
+    خالی جگہیں دونوں طرف برابر ڈالی جاتی ہیں تاکہ ایکسل کی سمت جو بھی ہو، عدد بیچ میں رہے۔"""
     px = sum((13 if cc == 1 else 17) * 7 + 5 for cc in range(c, c + span))      # خانے کی چوڑائی (پکسل)
-    pad = max(0, round((px - len(str(big)) * cw) / 2 / 5.2))                  # Arial 14 موٹا: عدد ≈10.4px، خالی جگہ ≈5.2px
-    return CellRichText(TextBlock(SMALL, small + "\n"), TextBlock(BIGF, str(big) + " " * pad))
+    p = max(0, int((px - len(str(big)) * cw) / 2 / 5.2) - 1)                      # دونوں طرف خالی جگہیں
+    line = small
+    if small_left:
+        n = max(2, int((px - 10 - _wpx(small) - _wpx(small_left)) / 2.96))
+        line = small + " " * n + small_left
+    first = ("\u202b" + line + "\u202c\n") if line else ""                      # RTL ترتیب: پہلا دائیں، آخری بائیں
+    return CellRichText(TextBlock(SMALL, first), TextBlock(BIGF, " " * p + str(big) + " " * p))
 
 
 def build_xlsx(case, res, path, lang=None, amounts=None):
@@ -142,31 +153,31 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         used = 5 if mid else 2
         # سطر 1: دائیں مسئلہ (دخل/وفق)، بائیں ما في اليد (دخل/وفق)، اور مورث کے نام کے اوپر بطن کا نام
         left_big = None
-        left_small = ""
-        right_small = []
+        left_small = ""          # دخل/وفق: بائیں کونے میں
+        right_small = []         # دخل/وفق مسئلے کی طرف
         if bi:
             parts = b.get("m_parts", [])
             left_big = f"{t['mafi']} {b['m']}" + (f"  ({' + '.join(str(v) for _, v in parts)})" if len(parts) > 1 else "")
             rr = b["ratio"]
             if rr["kind"] == "tadakhul":
                 q = max(rr["a"], rr["b"]) // min(rr["a"], rr["b"])
-                if rr["a"] < rr["b"]:           # ما في اليد چھوٹا: اس کا دخل بائیں، ما في اليد کے ساتھ
+                if rr["a"] < rr["b"]:           # ما في اليد چھوٹا: اس کا دخل ما في اليد کے خانے میں
                     left_small = f"دخل {q}"
-                else:                           # مسئلہ چھوٹا: اس کا دخل دائیں، مسئلے کے ساتھ
+                else:                           # مسئلہ چھوٹا: اس کا دخل مسئلے کے خانے میں
                     right_small.append(f"دخل {q}")
-            elif rr["kind"] == "tawafuq":       # دونوں کا وفق: ہر ایک کے ساتھ اپنی طرف
+            elif rr["kind"] == "tawafuq":       # دونوں کا وفق: ہر ایک کے ساتھ اپنے خانے میں
                 left_small = f"وفق {b['fh']}"
                 right_small.append(f"وفق {b['fJ']}")
-        if b["mudrub"] > 1:                     # مضروب × مسئلہ: مسئلے کے خانے کے کونے میں
-            right_small.insert(0, f"\u200e{b['mudrub']}×{b['asl']}")
+        calc = f"\u200e{b['mudrub']}×{b['asl']}" if b["mudrub"] > 1 else ""      # حساب: دائیں کونے میں
         r = nxt()
         if left_big:
             if left_small:
-                put(r, 2, corner_val(left_small, left_big, 2, used - 2, 8), used - 2, F(12), FILL_B, h=34, align=CORNER)
+                put(r, 2, corner_val("", left_big, 2, used - 2, 8, small_left=left_small), used - 2, F(12), FILL_B,
+                    h=34, align=CORNER)
             else:
                 put(r, 2, left_big, used - 2, F(12), FILL_B, h=28)
-        if right_small:
-            put(r, 1, corner_val("  ".join(right_small), b["T"], 1, 1), 1, F(12), h=34, align=CORNER)
+        if calc or right_small:
+            put(r, 1, corner_val(calc, b["T"], 1, 1, small_left="  ".join(right_small)), 1, F(12), h=34, align=CORNER)
         put(r, used, batan_name(bi), W - used + 1, F(12), FILL_B, h=28)
         # سطر 2: عنوان
         r = nxt()
@@ -201,7 +212,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                     kind, m = "برابر", 1
                 else:
                     kind, m = ("تباین" if st["status"] == "tabayun" else "توافق"), st["reduced"]
-                note = f"\u202b{{رؤوس ⤴{st['u']}}} {kind} {{سہام ⤵{st['S']}}}  مضـ {m}\u202c"   # RTL ترتیب پکی
+                note = f"{{رؤوس ⤴{st['u']}}} {kind} {{سہام ⤵{st['S']}}}  مضـ {m}"
                 val = corner_val(note, g["S"], c, span)
                 corner = True
                 any_note = True
