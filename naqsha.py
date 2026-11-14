@@ -5,6 +5,7 @@ phone or computer without LibreOffice on the server.
 """
 from __future__ import annotations
 
+import re
 from html import escape
 
 from openpyxl import load_workbook
@@ -82,7 +83,15 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
                         css = f"display:block;text-align:{'right' if is_small else 'center'};font-size:{f2.sz or 11}pt;font-weight:{700 if f2.b else 400}"
                         if f2.color is not None and getattr(f2.color, "rgb", None):
                             css += f";color:#{str(f2.color.rgb)[-6:]}"
-                        text += f'<span style="{css}">{escape(part.text.strip())}</span>'
+                        raw = part.text.replace("\u202b", "").replace("\u202c", "").strip("\n")
+                        pieces = re.split(r" {3,}", raw) if is_small else [raw]
+                        if len(pieces) == 2:
+                            # دائیں کونے میں حساب، بائیں کونے میں دخل/وفق (خالی جگہوں کا ہجوم HTML میں سمٹ جاتا ہے)
+                            r_txt, l_txt = escape(pieces[0].strip()), escape(pieces[1].strip())
+                            text += (f'<span style="{css};display:flex;justify-content:space-between;direction:rtl">'
+                                     f'<span>{r_txt}</span><span>{l_txt}</span></span>')
+                        else:
+                            text += f'<span style="{css}">{escape(raw.strip())}</span>'
                     elif isinstance(part, TextBlock):
                         f2 = part.font
                         sup = getattr(f2, "vertAlign", None) == "superscript"
