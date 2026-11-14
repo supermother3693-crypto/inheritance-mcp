@@ -72,8 +72,18 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
             v = cell.value
             if isinstance(v, CellRichText):
                 text = ""
+                corner = bool(al and al.horizontal == "right") and any(
+                    isinstance(x, TextBlock) and getattr(x.font, "vertAlign", None) != "superscript" for x in v)
                 for part in v:
-                    if isinstance(part, TextBlock):
+                    if corner and isinstance(part, TextBlock):
+                        # چھوٹا ٹیکسٹ دائیں کونے میں، بڑا عدد بیچ میں
+                        f2 = part.font
+                        is_small = (f2.sz or 11) < 10
+                        css = f"display:block;text-align:{'right' if is_small else 'center'};font-size:{f2.sz or 11}pt;font-weight:{700 if f2.b else 400}"
+                        if f2.color is not None and getattr(f2.color, "rgb", None):
+                            css += f";color:#{str(f2.color.rgb)[-6:]}"
+                        text += f'<span style="{css}">{escape(part.text.strip())}</span>'
+                    elif isinstance(part, TextBlock):
                         f2 = part.font
                         sup = getattr(f2, "vertAlign", None) == "superscript"
                         css = f"font-size:{f2.sz or 11}pt;font-weight:{700 if f2.b else 400}"

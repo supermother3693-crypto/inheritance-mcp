@@ -34,6 +34,7 @@ thin = Side(style="thin", color="444444")
 BOX = Border(left=thin, right=thin, top=thin, bottom=thin)
 F = lambda sz=12, b=True, color="000000": Font(name="Arial", size=sz, bold=b, color=color)
 CEN = Alignment(horizontal="center", vertical="center", wrap_text=True, readingOrder=2)
+CORNER = Alignment(horizontal="right", vertical="top", wrap_text=True)
 FILL_T = PatternFill("solid", fgColor="E8EEF7")
 FILL_B = PatternFill("solid", fgColor="FFF4D6")
 FILL_F = PatternFill("solid", fgColor="E6F4EA")
@@ -176,7 +177,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         # گروہ کی ضم شدہ لکیریں؛ سہام اور رؤوس کی نسبت اسی خانے میں چھوٹے حروف میں
         tkey = {st["key"]: st for st in b["tsteps"]}
         small_ratio = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
-        big_s = InlineFont(rFont="Arial", sz=12, b=True)
+        big_s = InlineFont(rFont="Arial", sz=14, b=True)
         any_note = False
         c = 1
         for g in b["groups"]:
@@ -191,9 +192,17 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                 else:
                     kind = "تباین" if st["status"] == "tabayun" else "توافق"
                     note = f"{{رؤوس {st['u']}}} ↕ {kind} ↕ {{سہام {st['S']}}}  ⇒ {st['reduced']}"
-                val = CellRichText(TextBlock(small_ratio, note + "\n"), TextBlock(big_s, str(g["S"])))
+                # چھوٹا ٹیکسٹ اوپر دائیں کونے میں؛ بڑا عدد خالی جگہوں سے خانے کے بیچ میں لایا جاتا ہے
+                px = sum((17 if cc < W else 13) * 7 + 5 for cc in range(c, c + span))   # خانے کی چوڑائی (پکسل)
+                digits = len(str(g["S"]))
+                pad = max(0, round((px - digits * 10.4) / 2 / 5.2))        # Arial 14 موٹا: عدد ≈10.4px، خالی جگہ ≈5.2px
+                val = CellRichText(TextBlock(small_ratio, note + "\n"),
+                                   TextBlock(big_s, str(g["S"]) + " " * pad))
+                corner = True
                 any_note = True
-            put(r_S, c, val, span, F(12), h=22)
+            else:
+                corner = False
+            put(r_S, c, val, span, F(12), h=22, align=CORNER if corner else CEN)
             c += span
         if any_note:
             ws.row_dimensions[r_S].height = 36
