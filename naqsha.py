@@ -80,7 +80,7 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
                         if f2.color is not None and getattr(f2.color, "rgb", None):
                             css += f";color:#{str(f2.color.rgb)[-6:]}"
                         tag = "sup" if sup else "span"
-                        text += f'<{tag} style="{css}">{escape(part.text)}</{tag}>'
+                        text += f'<{tag} style="{css}">{escape(part.text).replace(chr(10), "<br>")}</{tag}>'
                     else:
                         text += escape(str(part))
             else:
@@ -101,9 +101,9 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 <title>{page_title}</title>
 <style>
   body {{ margin: 0; font-family: {FONT}; background: #fff; }}
-  .bar {{ position: sticky; top: 0; z-index: 2; background: #1f3b64; color: #fff; padding: 10px 14px;
-          display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }}
-  .bar button {{ font: inherit; padding: 8px 16px; border: 0; border-radius: 8px; background: #fff; color: #1f3b64;
+  .bar {{ position: sticky; top: 0; z-index: 2; background: #1f3b64; color: #fff; padding: 4px 10px;
+          display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }}
+  .bar button {{ font: inherit; padding: 3px 12px; border: 0; border-radius: 6px; font-size: 15px; background: #fff; color: #1f3b64;
                  font-weight: 700; cursor: pointer; }}
   .bar span {{ font-size: 13px; opacity: .9; }}
   .wrap {{ overflow-x: auto; padding: 10px; }}
@@ -121,11 +121,10 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 </head>
 <body>
 <div class="bar">
-  <button onclick="window.print()">PDF محفوظ کریں / پرنٹ</button>
+  <button onclick="window.print()" title="PDF محفوظ کریں / پرنٹ (کھلنے والی ونڈو میں Save as PDF چنیں)">⤓ PDF</button>
   <button onclick="zoomBy(1.2)" aria-label="بڑا کریں">＋</button>
   <button onclick="zoomBy(1/1.2)" aria-label="چھوٹا کریں">－</button>
-  <button onclick="fit()">پوری چوڑائی</button>
-  <span>کھلنے والی ونڈو میں «Save as PDF» (PDF کے طور پر محفوظ کریں) چنیں۔ فون پر ٹیبل کو انگلیوں سے بڑا کر کے دیکھ سکتے ہیں۔</span>
+  <button onclick="fit()" title="پوری چوڑائی" aria-label="پوری چوڑائی">⤢</button>
 </div>
 <div class="wrap">
 <table><colgroup>{cols}</colgroup>

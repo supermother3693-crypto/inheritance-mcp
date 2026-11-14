@@ -106,13 +106,14 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
     facs = []
     for i, b in enumerate(blocks):
         if i and b["fJ"] > 1:
-            facs.append((i + 1, b["fJ"]))
+            facs.append((i, b["fJ"]))
             vals.append(vals[-1] * b["fJ"])
     for k in range(len(vals) - 1, -1, -1):
         r = nxt()
-        put(r, 1, vals[k], 1, F(14), FILL_B, h=22)
-        if k < len(facs) + 0 and k < len(vals) - 1:
-            put(r, W, f"× {facs[k][1]}", 1, F(11, False, "555555"), border=False)
+        has_f = k < len(facs) and k < len(vals) - 1
+        put(r, 1, vals[k], 1, F(14), FILL_B, h=30 if has_f else 22)
+        if has_f:   # ضرب کے ساتھ مختصر وجہ: کس بطن کی وجہ سے
+            put(r, W, f"× {facs[k][1]}\n{batan_name(facs[k][0])}", 1, F(10, False, "555555"), border=False)
     nxt()
 
     people = res["people"]
@@ -121,46 +122,47 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         dec = inp["deceased"]
         lab = t["decf"] if b["gender"] == "F" else t["dec"]
         wf = f" ({dec['wafat']})" if dec.get("wafat") else ""
-        asl_txt = str(b["asl_f"]) if b["asl"] == b["asl_f"] else f"{b['asl_f']}→{b['asl']}"
-        tag = (" عول" if b["awl"] else (" رد" if b["radd"] else ""))
-        # سطر 1: بائیں «ما في اليد» (اس کا دخل/وفق بھی)، دائیں مسئلہ (اس کا دخل/وفق بھی)
-        if bi or b["mudrub"] > 1:
-            left_t = right_t = None
-            if bi:
-                parts = b.get("m_parts", [])
-                left_t = f"{t['mafi']} {b['m']}" + (f"  ({' + '.join(str(v) for _, v in parts)})" if len(parts) > 1 else "")
-                rr = b["ratio"]
-                if rr["kind"] == "tadakhul":
-                    q = max(rr["a"], rr["b"]) // min(rr["a"], rr["b"])
-                    if rr["a"] < rr["b"]:           # ما في اليد چھوٹا: اس کا دخل بائیں، ما في اليد کے ساتھ
-                        left_t += f"  دخل {q}"
-                    else:                           # مسئلہ چھوٹا: اس کا دخل دائیں، مسئلے کے ساتھ
-                        right_t = f"{b['T']}  دخل {q}"
-                elif rr["kind"] == "tawafuq":       # دونوں کا وفق: ہر ایک کے ساتھ اپنی طرف
-                    left_t += f"  وفق {b['fh']}"
-                    right_t = f"{b['T']}  وفق {b['fJ']}"
-            r = nxt()
-            if left_t:
-                put(r, 3, left_t, W - 3, F(12), FILL_B, h=24)
-            if b["mudrub"] > 1 or right_t:
-                put(r, 1, right_t or b["T"], 1, F(12 if right_t else 13), h=24)
-        # سطر 2: عنوان
-        r = nxt()
-        put(r, 1, asl_txt + tag, 1, F(13), FILL_T, h=28)
+        if b["radd"] and b["asl"] != b["asl_f"]:
+            asl_txt = f"{b['asl_f']} / رد {b['asl']}"        # مسئلہ جس عدد سے چلا / پھر رد کا عدد
+        elif b["awl"] and b["asl"] != b["asl_f"]:
+            asl_txt = f"{b['asl_f']} / عول {b['asl']}"
+        else:
+            asl_txt = str(b["asl"]) + (" رد" if b["radd"] else "")
         mid = ""
         if b["mudrub"] > 1:
             mid = f"{t['mazrub']} {b['mudrub']}"
         if bi:
             rr = b["ratio"]
             mid = (mid + "   " if mid else "") + f"{rr['name']}  (↑×{b['fJ']}  ↓×{b['fh']})"
+        used = 5 if mid else 2
+        # سطر 1: دائیں مسئلہ (دخل/وفق)، بائیں ما في اليد (دخل/وفق)، اور مورث کے نام کے اوپر بطن کا نام
+        left_t = right_t = None
+        if bi:
+            parts = b.get("m_parts", [])
+            left_t = f"{t['mafi']} {b['m']}" + (f"  ({' + '.join(str(v) for _, v in parts)})" if len(parts) > 1 else "")
+            rr = b["ratio"]
+            if rr["kind"] == "tadakhul":
+                q = max(rr["a"], rr["b"]) // min(rr["a"], rr["b"])
+                if rr["a"] < rr["b"]:           # ما في اليد چھوٹا: اس کا دخل بائیں، ما في اليد کے ساتھ
+                    left_t += f"  دخل {q}"
+                else:                           # مسئلہ چھوٹا: اس کا دخل دائیں، مسئلے کے ساتھ
+                    right_t = f"{b['T']}  دخل {q}"
+            elif rr["kind"] == "tawafuq":       # دونوں کا وفق: ہر ایک کے ساتھ اپنی طرف
+                left_t += f"  وفق {b['fh']}"
+                right_t = f"{b['T']}  وفق {b['fJ']}"
+        r = nxt()
+        if left_t:
+            put(r, 2, left_t, used - 2, F(12), FILL_B, h=28)
+        if b["mudrub"] > 1 or right_t:
+            put(r, 1, right_t or b["T"], 1, F(12 if right_t else 13), h=28)
+        put(r, used, batan_name(bi), W - used + 1, F(12), FILL_B, h=28)
+        # سطر 2: عنوان
+        r = nxt()
+        put(r, 1, asl_txt, 1, F(13), FILL_T, h=28)
         if mid:
-            put(r, 2, mid, 3 if W > 5 else 2, F(12), FILL_T)
-            used = 2 + (3 if W > 5 else 2)
-        else:
-            used = 2
-        dua = DUA["F" if b["gender"] == "F" else "M"][bi % 2]
-        put(r, used, batan_name(bi), 1, F(13), FILL_B)
-        put(r, used + 1, f"{lab}: {dec['name']}  {dua}{wf}", W - used, F(13), FILL_T)
+            put(r, 2, mid, 3, F(12), FILL_T)
+        dua = DUA["F"if b["gender"] == "F" else "M"][bi % 2]
+        put(r, used, f"{lab}: {dec['name']}  {dua}{wf}", W - used + 1, F(13), FILL_T)
         cols = b["cols"]
         gi_of = {}
         for gi, g in enumerate(b["groups"]):
@@ -171,33 +173,30 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         for ci, h in enumerate(cols):
             put(r_rel, 1 + ci, rel_label(h["rel"], lang), 1, F(11), h=22)
             put(r_nm, 1 + ci, h["name"], 1, F(12), h=34)
-        # گروہ کی ضم شدہ لکیریں
+        # گروہ کی ضم شدہ لکیریں؛ سہام اور رؤوس کی نسبت اسی خانے میں چھوٹے حروف میں
+        tkey = {st["key"]: st for st in b["tsteps"]}
+        small_ratio = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
+        big_s = InlineFont(rFont="Arial", sz=12, b=True)
+        any_note = False
         c = 1
         for g in b["groups"]:
             span = len(g["members"])
             lab_k = g["label"] + (f" ({g['sub']})" if g["sub"] and g["asaba"] else "")
             put(r_kind, c, lab_k, span, F(12), FILL_F, h=24)
-            put(r_S, c, g["S"], span, F(12), h=22)
-            c += span
-        # گروہ کے سہام اور افراد کی تعداد کی نسبت (چھوٹے حروف میں، گروہ کے عین نیچے)
-        tkey = {st["key"]: st for st in b["tsteps"]}
-        notes_row = []
-        for g in b["groups"]:
             st = tkey.get(g["key"])
-            txt = ""
+            val = g["S"]
             if st and st["u"] > 1:
                 if st["status"] == "divisible":
-                    txt = f"{st['S']} ÷ {st['u']}  برابر"
+                    note = f"{{رؤوس {st['u']}}} ↕ برابر ↕ {{سہام {st['S']}}}"
                 else:
-                    txt = f"{st['S']} ↔ {st['u']}  {'تباین' if st['status'] == 'tabayun' else 'توافق'}  ⇒ {st['reduced']}"
-            notes_row.append(txt)
-        if any(notes_row):
-            r_sr = nxt()
-            c = 1
-            for g, txt in zip(b["groups"], notes_row):
-                span = len(g["members"])
-                put(r_sr, c, txt, span, F(9, False, "555555"), h=16)
-                c += span
+                    kind = "تباین" if st["status"] == "tabayun" else "توافق"
+                    note = f"{{رؤوس {st['u']}}} ↕ {kind} ↕ {{سہام {st['S']}}}  ⇒ {st['reduced']}"
+                val = CellRichText(TextBlock(small_ratio, note + "\n"), TextBlock(big_s, str(g["S"])))
+                any_note = True
+            put(r_S, c, val, span, F(12), h=22)
+            c += span
+        if any_note:
+            ws.row_dimensions[r_S].height = 36
         if b["mudrub"] > 1:
             r_fr = nxt()
             c = 1
@@ -221,7 +220,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                         FILL_R if dead else None, h=22, box=BOX_R if dead else None)
             if k >= 1:
                 kk, f, kind = lad["events"][k - 1]
-                put(r, W, f"× {f}", 1, F(10, False, "555555"), border=False)
+                put(r, W, f"× {f}\n{batan_name(kk)}", 1, F(10, False, "555555"), border=False, h=30)
         # --- نوٹس / وضاحت ---
         lines = []
         if b["tsteps"]:
@@ -291,6 +290,12 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         r = nxt()
         put(r, 1, "نوٹ: " + n, W, F(11), border=False, h=32,
             align=Alignment(horizontal="right", vertical="center", wrap_text=True, readingOrder=2))
+    nxt()
+    r = nxt()
+    put(r, 1, "علامات:  {n} سرخ خانہ = وہ وارث جو بعد میں فوت ہوا؛  × = ضرب (ساتھ وجہ: کس بطن کی وجہ سے)؛  "
+              "دخل / وفق = ما فی الید اور مسئلے کی نسبت؛  {رؤوس} ↕ {سہام} = افراد کی تعداد اور گروہ کے حصوں کی نسبت",
+        W, F(9, False, "555555"), border=False, h=30,
+        align=Alignment(horizontal="right", vertical="center", wrap_text=True, readingOrder=2))
     nxt()
     for ln in case.get("footer", []) or [t["last"]]:
         r = nxt()
