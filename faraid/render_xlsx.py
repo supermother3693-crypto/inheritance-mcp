@@ -264,15 +264,15 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                 x, y, rr_ = ch["a"], ch["b"], ch["ratio"]
                 k_ = rr_["kind"]
                 if k_ == "tamathul":
-                    acc_line.append(f"{{{x}}} تماثل {{{y}}}  مضـ {ch['result']}")
+                    acc_line.append(f"{{{x}}} ≡ {{{y}}}  مضـ {ch['result']}")
                 elif k_ == "tadakhul":
-                    acc_line.append(f"{{{x}}} تداخل {{{y}}}  مضـ {ch['result']}")
+                    acc_line.append(f"{{{x}}} ⊂ {{{y}}}  مضـ {ch['result']}")
                 elif k_ == "tawafuq":
                     lo, hi = (x, y) if x <= y else (y, x)
                     d_ = rr_["g"]
-                    acc_line.append(f"{{{x}}} توافق {{{y}}}  وفق {lo // d_} × {hi}  مضـ {ch['result']}")
+                    acc_line.append(f"{{{x}}} ⋈ {{{y}}}  وفق {lo // d_} × {hi}  مضـ {ch['result']}")
                 else:
-                    acc_line.append(f"{{{x}}} تباین {{{y}}}  {x} × {y}  مضـ {ch['result']}")
+                    acc_line.append(f"{{{x}}} ⊘ {{{y}}}  {x} × {y}  مضـ {ch['result']}")
             parts += acc_line
             parts.append(f"\u200e{b['asl']} × {b['mudrub']} = {b['T']}")
             lines.append("تصحیح:\n" + "\n".join(parts))
