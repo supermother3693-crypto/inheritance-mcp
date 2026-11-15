@@ -250,17 +250,32 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         # --- نوٹس / وضاحت ---
         lines = []
         if b["tsteps"]:
-            bits = []
-            for s in b["tsteps"]:
-                if s["status"] == "divisible":
-                    bits.append(f"{s['S']}÷{s['u']} برابر")
-                else:
-                    bits.append(f"{s['S']}↔{s['u']} {'تباین' if s['status'] == 'tabayun' else 'توافق'} ⇒ {s['reduced']}")
-            line = "تصحیح:  " + "،  ".join(bits)
+            # تصحیح: ہر طائفے کی اپنی نسبت، پھر محفوظ اعداد کی آپس کی نسبت، پھر تصحیح (ایک ہی خانے میں، لائن بہ لائن)
+            keyname = {g["key"]: g for g in b["groups"]}
+            parts = []
+            for st_ in b["tsteps"]:
+                if st_["status"] == "divisible":
+                    continue
+                kind_ = "تباین" if st_["status"] == "tabayun" else "توافق"
+                tail = f"وفق {st_['reduced']}" if st_["status"] == "tawafuq" else f"مضـ {st_['reduced']}"
+                parts.append(f"{{رؤوس ⤴{st_['u']}}} {kind_} {{سہام ⤵{st_['S']}}}  {tail}")
+            acc_line = []
             for ch in b["tchain"]:
-                line += f"،  {ch['a']}↔{ch['b']} {ch['ratio']['name']} ⇒ {ch['result']}"
-            line += f"  ⇒ {t['mazrub']} {b['mudrub']}  ⇒  {b['asl']}×{b['mudrub']} = {b['T']}"
-            lines.append(line)
+                x, y, rr_ = ch["a"], ch["b"], ch["ratio"]
+                k_ = rr_["kind"]
+                if k_ == "tamathul":
+                    acc_line.append(f"{{{x}}} تماثل {{{y}}}  مضـ {ch['result']}")
+                elif k_ == "tadakhul":
+                    acc_line.append(f"{{{x}}} تداخل {{{y}}}  مضـ {ch['result']}")
+                elif k_ == "tawafuq":
+                    lo, hi = (x, y) if x <= y else (y, x)
+                    d_ = rr_["g"]
+                    acc_line.append(f"{{{x}}} توافق {{{y}}}  وفق {lo // d_} × {hi}  مضـ {ch['result']}")
+                else:
+                    acc_line.append(f"{{{x}}} تباین {{{y}}}  {x} × {y}  مضـ {ch['result']}")
+            parts += acc_line
+            parts.append(f"\u200e{b['asl']} × {b['mudrub']} = {b['T']}")
+            lines.append("تصحیح:\n" + "\n".join(parts))
         if b["radd"] and "ratio" in b["radd"]:
             rd = b["radd"]
             lines.append(f"رد: ما بقیہ {rd['R']} اور من یرد علیہم {rd['S_r']} میں {rd['ratio']['name']} ⇒ "
@@ -275,7 +290,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             r = nxt()
             put(r, 1, ln, W, F(10, False, "333333"), border=False,
                 align=Alignment(horizontal="right", vertical="center", wrap_text=True, readingOrder=2),
-                h=18 if len(ln) < 110 else 34)
+                h=(15 * (ln.count(chr(10)) + 1) + 4) if ln.count(chr(10)) else (18 if len(ln) < 110 else 34))
         nxt()
 
     # ---- آخری سہام ----
