@@ -61,6 +61,20 @@ def _wpx(text, per=4.8):
     return sum(5.9 if ch.isdigit() else (2.96 if ch == " " else per) for ch in text) * 1.05
 
 
+
+def ratio_kind(st):
+    """رؤوس اور سہام کی نسبت: (نام، مضروب، بائیں کونے کا دخل/وفق)۔
+    تماثل: برابر | تداخل: ایک عدد دوسرے میں پورا (سہام چھوٹے ہوں تو دخل = رؤوس÷سہام)
+    توافق: مشترک عدد (وفق) | تباین: کوئی مشترک نہیں۔"""
+    S, u = st["S"], st["u"]
+    if st["status"] == "divisible":
+        return ("تماثل" if S == u else "تداخل"), 1, ""
+    if st["status"] == "tabayun":
+        return "تباین", st["reduced"], ""
+    if S < u and u % S == 0:
+        return "تداخل", st["reduced"], f"دخل {u // S}"
+    return "توافق", st["reduced"], f"وفق {S // (u // st['reduced'])}"
+
 def corner_val(small, big, c, span, cw=10.4, small_left=""):
     """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا حساب اسی خانے میں دائیں اوپر کے کونے میں،
     اور دخل/وفق (small_left) بائیں اوپر کے کونے میں۔ c = منطقی کالم (1 = دائیں، تنگ)، span = کالم۔
@@ -208,14 +222,8 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             val = g["S"]
             corner = False
             if st and st["u"] > 1:
-                if st["status"] == "divisible":
-                    kind, m = "برابر", 1
-                else:
-                    kind, m = ("تباین" if st["status"] == "tabayun" else "توافق"), st["reduced"]
+                kind, m, left = ratio_kind(st)
                 note = f"{{رؤوس ⤴{st['u']}}} {kind} {{سہام ⤵{st['S']}}}  مضـ {m}"
-                left = ""
-                if st["status"] == "tawafuq":      # وفق: اسی خانے کے بائیں اوپر کے کونے میں
-                    left = f"وفق {st['S'] // (st['u'] // st['reduced'])}"
                 val = corner_val(note, g["S"], c, span, small_left=left)
                 corner = True
                 any_note = True
@@ -256,8 +264,13 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             for st_ in b["tsteps"]:
                 if st_["status"] == "divisible":
                     continue
-                kind_ = "تباین" if st_["status"] == "tabayun" else "توافق"
-                tail = f"وفق {st_['reduced']}" if st_["status"] == "tawafuq" else f"مضـ {st_['reduced']}"
+                kind_ = ratio_kind(st_)[0]
+                if kind_ == "تداخل":
+                    tail = f"دخل {st_['reduced']}"
+                elif kind_ == "توافق":
+                    tail = f"وفق {st_['reduced']}"
+                else:
+                    tail = f"مضـ {st_['reduced']}"
                 parts.append(f"{{رؤوس ⤴{st_['u']}}} {kind_} {{سہام ⤵{st_['S']}}}  {tail}")
             acc_line = []
             for ch in b["tchain"]:
