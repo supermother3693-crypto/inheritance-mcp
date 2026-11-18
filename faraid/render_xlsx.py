@@ -258,35 +258,35 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         # --- نوٹس / وضاحت ---
         lines = []
         if b["tsteps"]:
-            # تصحیح: ہر طائفے کی اپنی نسبت، پھر محفوظ اعداد کی آپس کی نسبت، پھر تصحیح (ایک ہی خانے میں، لائن بہ لائن)
-            keyname = {g["key"]: g for g in b["groups"]}
+            # تصحیح: مکسور فریقوں کے عدد محفوظہ، پھر فریقوں کی اپنی ترتیب سے ایک ایک کر کے مقابلہ
+            tk_ = {t["key"]: t for t in b["tsteps"]}
+            nums = [ts_["reduced"] for g in b["groups"] if (ts_ := tk_.get(g["key"])) and ts_["reduced"] > 1]
             parts = []
-            for st_ in b["tsteps"]:
-                if st_["status"] == "divisible":
-                    continue
-                kind_ = ratio_kind(st_)[0]
-                if kind_ == "تداخل":
-                    tail = f"دخل {st_['reduced']}"
-                elif kind_ == "توافق":
-                    tail = f"وفق {st_['reduced']}"
-                else:
-                    tail = f"مضـ {st_['reduced']}"
-                parts.append(f"{{رؤوس ⤴{st_['u']}}} {kind_} {{سہام ⤵{st_['S']}}}  {tail}")
-            acc_line = []
-            for ch in b["tchain"]:
-                x, y, rr_ = ch["a"], ch["b"], ch["ratio"]
-                k_ = rr_["kind"]
-                if k_ == "tamathul":
-                    acc_line.append(f"{{{x}}} ≡ {{{y}}}  مضـ {ch['result']}")
-                elif k_ == "tadakhul":
-                    acc_line.append(f"{{{x}}} ⊂ {{{y}}}  مضـ {ch['result']}")
-                elif k_ == "tawafuq":
-                    lo, hi = (x, y) if x <= y else (y, x)
-                    d_ = rr_["g"]
-                    acc_line.append(f"{{{x}}} ⋈ {{{y}}}  وفق {lo // d_} × {hi}  مضـ {ch['result']}")
-                else:
-                    acc_line.append(f"{{{x}}} ⊘ {{{y}}}  {x} × {y}  مضـ {ch['result']}")
-            parts += acc_line
+            if len(nums) > 1:
+                ords = ["اوّل", "ثانی", "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "عاشر"]
+                parts.append("مکسور: " + " · ".join(f"{ords[i] if i < len(ords) else i + 1} {n}" for i, n in enumerate(nums)))
+                parts.append("")
+                acc = nums[0]
+                left = f"{ords[0]} {acc}"
+                for i, v in enumerate(nums[1:], 1):
+                    last = i == len(nums) - 1
+                    from math import gcd as _g
+                    g_ = _g(acc, v)
+                    if acc == v:
+                        kind, work, new = "تماثل", "", acc
+                    elif acc % v == 0:
+                        kind, work, new = "تداخل", f"دخل {acc // v}", acc
+                    elif v % acc == 0:
+                        kind, work, new = "تداخل", f"دخل {v // acc}", v
+                    elif g_ == 1:
+                        kind, work, new = "تباین", f"{acc} × {v}", acc * v
+                    else:
+                        kind, work, new = "توافق", f"وفق {v // g_} × {acc}", acc * (v // g_)
+                    tail = ("مضـ " if last else "محفوظ ") + str(new)
+                    parts.append(f"{{{left}}} {kind} {{{ords[i] if i < len(ords) else i + 1} {v}}}  " + (work + "  " if work else "") + tail)
+                    acc = new
+                    left = f"محفوظ {acc}"
+                parts.append("")
             parts.append(f"\u200e{b['asl']} × {b['mudrub']} = {b['T']}")
             lines.append("تصحیح:\n" + "\n".join(parts))
         if b["radd"] and "ratio" in b["radd"]:
