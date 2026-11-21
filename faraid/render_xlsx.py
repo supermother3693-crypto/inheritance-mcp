@@ -226,7 +226,11 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
             put(r, used, batan_name(bi), W - used + 1, F(12), FILL_B, h=28)
         # سطر 2: عنوان
         r = nxt()
-        put(r, 1, asl_txt, 1, F(13), FILL_T, h=28)
+        if len(blocks) == 1 and b["mudrub"] > 1 and asl_txt == str(b["asl"]):
+            # ایک بطن: مسئلہ مضروب کے ساتھ ضرب ہو کر یہیں 120 بنتا ہے؛ دائیں کونے میں حساب
+            put(r, 1, corner_val(f"\u200e{b['mudrub']}×{b['asl']}", b["T"], 1, 1), 1, F(13), FILL_T, h=34, align=CORNER)
+        else:
+            put(r, 1, asl_txt, 1, F(13), FILL_T, h=28)
         if mid:
             put(r, 2, mid, 3, F(12), FILL_T)
         dua = DUA["F"if b["gender"] == "F" else "M"][bi % 2]
