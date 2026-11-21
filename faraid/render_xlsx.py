@@ -97,7 +97,7 @@ def _colchars(cc):
     return _COLW.get(actual, 13 if cc == 1 else 17)
 
 
-def corner_val(small, big, c, span, cw=10.4, small_left="", blue=""):
+def corner_val(small, big, c, span, cw=10.4, small_left="", blue="", blue_left=""):
     """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا حساب اسی خانے میں دائیں اوپر کے کونے میں،
     اور دخل/وفق (small_left) بائیں اوپر کے کونے میں۔ c = منطقی کالم (1 = دائیں، تنگ)، span = کالم۔
     خالی جگہیں دونوں طرف برابر ڈالی جاتی ہیں تاکہ ایکسل کی سمت جو بھی ہو، عدد بیچ میں رہے۔"""
@@ -108,6 +108,10 @@ def corner_val(small, big, c, span, cw=10.4, small_left="", blue=""):
         n = max(2, int((px - 10 - _wpx(small) - _wpx(small_left)) / 2.96))
         line = small + " " * n + small_left
     first = ("\u202b" + line + "\u202c\n") if line else ""                      # RTL ترتیب: پہلا دائیں، آخری بائیں
+    if blue_left:                                                               # نیلی سطر: بائیں کونے میں "مضروب n"
+        n2 = max(2, int((px - 10 - _wpx(blue_left)) / 2.96))
+        return CellRichText(TextBlock(SMALL, first), TextBlock(BLUE, "\u202b" + " " * n2 + blue_left + "\u202c\n"),
+                            TextBlock(BIGF, " " * p + str(big) + " " * p))
     if blue:                                                                    # نیلی سطر: "محفوظ n"
         return CellRichText(TextBlock(SMALL, first), TextBlock(BLUE, "\u202b" + blue + "\u202c\n"),
                             TextBlock(BIGF, " " * p + str(big) + " " * p))
@@ -269,7 +273,8 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
                         left = ""          # کئی طائفوں میں کسر: دخل/وفق نہیں، صرف محفوظ عدد
                     elif left.startswith("وفق"):
                         left = f"⤴وفق {m}  ⤵{left}"      # ایک ہی طائفہ: رؤوس اور سہام دونوں کا وفق
-                    val = corner_val(note, g["S"], c, span, small_left=left, blue=(f"محفوظ {m}" if n_kasr > 1 else ""))
+                    val = corner_val(note, g["S"], c, span, small_left=left, blue=(f"محفوظ {m}" if n_kasr > 1 else ""),
+                                     blue_left=(f"مضروب {b['mudrub']}" if n_kasr == 1 else ""))
                     corner = True
                     any_note = True
             put(r_S, c, val, span, F(12), h=22, align=CORNER if corner else CEN)
