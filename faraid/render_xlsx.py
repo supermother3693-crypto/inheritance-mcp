@@ -57,6 +57,7 @@ SMALL = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
 BIGF = InlineFont(rFont="Arial", sz=14, b=True)
 BLUE = InlineFont(rFont="Arial", sz=8, b=True, color="1F4E9C")          # "محفوظ n" کا عنوان
 BOXB = InlineFont(rFont="Arial", sz=9, b=True, color="1F4E9C")          # تصحیح خانے کا نیلا عنوان
+BOXBIG = InlineFont(rFont="Arial", sz=13, b=True, color="1F4E9C")
 BOXN = InlineFont(rFont="Arial", sz=9, b=False, color="333333")
 _WAFQ = {2: "بالنصف", 3: "بالثلث", 4: "بالربع", 5: "بالخمس", 6: "بالسدس", 7: "بالسبع", 8: "بالثمن", 9: "بالتسع", 10: "بالعشر"}
 
@@ -166,12 +167,15 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
             facs.append((i, b["fJ"]))
             vals.append(vals[-1] * b["fJ"])
     for k in range(len(vals) - 1, -1, -1):
+        if len(blocks) == 1:          # ایک ہی بطن: اوپر کا عدد دہرانا نہیں (وہی بطن کے خانے میں ہے)
+            break
         r = nxt()
         has_f = k < len(facs) and k < len(vals) - 1
         put(r, 1, vals[k], 1, F(14), FILL_B, h=22)
         if has_f:   # ضرب کے ساتھ مختصر وجہ: کس بطن کی وجہ سے (ایک ہی لائن میں)
             put(r, W, f"× {facs[k][1]} / {batan_name(facs[k][0])}", 1, F(10, False, "555555"), border=False, align=NOWRAP)
-    nxt()
+    if len(blocks) > 1:
+        nxt()
 
     people = res["people"]
     for bi, b in enumerate(blocks):
@@ -200,9 +204,9 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
             rr = b["ratio"]
             if rr["kind"] == "tadakhul":
                 q = max(rr["a"], rr["b"]) // min(rr["a"], rr["b"])
-                if rr["a"] < rr["b"]:           # ما في اليد چھوٹا: اس کا دخل ما في اليد کے خانے میں
+                if rr["a"] > rr["b"]:           # ما في اليد بڑا: دخل ما في اليد کی جانب (بائیں)
                     left_small = f"دخل {q}"
-                else:                           # مسئلہ چھوٹا: اس کا دخل مسئلے کے خانے میں
+                else:                           # مسئلہ بڑا: دخل مسئلے کی جانب (دائیں)
                     right_small.append(f"دخل {q}")
             elif rr["kind"] == "tawafuq":       # دونوں کا وفق: ہر ایک کے ساتھ اپنے خانے میں
                 left_small = f"وفق {b['fh']}"
@@ -277,8 +281,11 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
         # --- سیڑھی ---
         lad = ladders[bi]
         nrows = max(len(v["vals"]) for v in lad["per"].values())
+        r0 = None
         for k in range(nrows):
             r = nxt()
+            if k == 0:
+                r0 = r
             for ci, h in enumerate(cols):
                 pv = lad["per"][h["id"]]
                 if k < len(pv["vals"]):
@@ -291,6 +298,18 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
             if k >= 1:
                 kk, f, kind = lad["events"][k - 1]
                 put(r, W, f"× {f} / {batan_name(kk)}", 1, F(10, False, "555555"), border=False, align=NOWRAP)
+        # --- ایک رکن والے طائفے میں اوپر نیچے کے برابر خانے ایک کر دیں (بیچ کی لکیر ہٹا کر) ---
+        r_last = r_fr if b["mudrub"] > 1 else r_S
+        if r0 == r_last + 1:
+            c = 1
+            for g in b["groups"]:
+                span = len(g["members"])
+                if span == 1:
+                    pv = lad["per"][cols[c - 1]["id"]]
+                    if pv["vals"] and not (pv["dies"] and len(pv["vals"]) == 1) and pv["vals"][0] == g["S"] * b["mudrub"]:
+                        ac = W - c + 1
+                        ws.merge_cells(start_row=r_last, start_column=ac, end_row=r0, end_column=ac)
+                c += span
         # --- نوٹس / وضاحت ---
         lines = []
         if b["tsteps"]:
@@ -317,8 +336,10 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
                     rows_t.append(f"{acc} اور {v}: {kind}" + (f"، {work}" if work else "") + f"  ←  {new}")
                     acc = new
                 head = " > ".join(str(n) for n in nums)
-                body = "\n" + "\n".join(rows_t) + "\n" + f"\u200e{b['asl']} × {b['mudrub']} = {b['T']}"
-                tasheeh_box = CellRichText(TextBlock(BOXB, "محفوظات: "), TextBlock(BOXN, head + body))
+                body = "\n" + "\n".join(rows_t) + "\n"
+                tasheeh_box = CellRichText(TextBlock(BOXB, "محفوظات: "), TextBlock(BOXN, head + body),
+                                           TextBlock(BOXB, "مضروب "), TextBlock(BOXBIG, str(b["mudrub"])),
+                                           TextBlock(BOXN, "\n" + f"\u200e{b['asl']} × {b['mudrub']} = {b['T']}"))
             else:
                 lines.append(f"تصحیح:  \u202a{b['asl']} × {b['mudrub']} = {b['T']}\u202c")
         if tasheeh_box is not None:
