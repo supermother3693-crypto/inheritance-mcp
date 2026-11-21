@@ -4,6 +4,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.cell.text import InlineFont
+from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter as L
 from .relations import rel_label
 
@@ -85,11 +86,21 @@ def ratio_kind(st):
         return "تداخل", st["reduced"], f"دخل {u // S}"
     return tawafuq_name(u // st["reduced"]), st["reduced"], f"وفق {S // (u // st['reduced'])}"
 
+_COLW = {}       # اصل کالم → چوڑائی (حرفوں میں)؛ خالی ہو تو پہلے سے طے شدہ ناپ
+_CUR_W = [7]
+
+
+def _colchars(cc):
+    """منطقی کالم cc (1 = دائیں) کی چوڑائی۔"""
+    actual = _CUR_W[0] - cc + 1
+    return _COLW.get(actual, 13 if cc == 1 else 17)
+
+
 def corner_val(small, big, c, span, cw=10.4, small_left="", blue=""):
     """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا حساب اسی خانے میں دائیں اوپر کے کونے میں،
     اور دخل/وفق (small_left) بائیں اوپر کے کونے میں۔ c = منطقی کالم (1 = دائیں، تنگ)، span = کالم۔
     خالی جگہیں دونوں طرف برابر ڈالی جاتی ہیں تاکہ ایکسل کی سمت جو بھی ہو، عدد بیچ میں رہے۔"""
-    px = sum((13 if cc == 1 else 17) * 7 + 5 for cc in range(c, c + span))      # خانے کی چوڑائی (پکسل)
+    px = sum(_colchars(cc) * 7 + 5 for cc in range(c, c + span))                # خانے کی چوڑائی (پکسل)
     p = max(0, int((px - len(str(big)) * cw) / 2 / 5.2) - 1)                      # دونوں طرف خالی جگہیں
     line = small
     if small_left:
@@ -102,7 +113,7 @@ def corner_val(small, big, c, span, cw=10.4, small_left="", blue=""):
     return CellRichText(TextBlock(SMALL, first), TextBlock(BIGF, " " * p + str(big) + " " * p))
 
 
-def build_xlsx(case, res, path, lang=None, amounts=None):
+def _build_xlsx(case, res, path, lang=None, amounts=None):
     """amounts (اختیاری): {"per": {آئی ڈی: رقم}, "distributable": کل قابلِ تقسیم رقم}
     دیا جائے تو آخری سہام کے نیچے رقم کی سطر بھی چھپتی ہے؛ ورنہ نقشہ پہلے جیسا ہی رہتا ہے۔"""
     lang = lang or case.get("lang", "ur")
@@ -114,8 +125,9 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
     ws = wb.active
     ws.title = "نقشہ"
     ws.sheet_view.showGridLines = False
+    _CUR_W[0] = W
     for c in range(1, W + 1):
-        ws.column_dimensions[L(c)].width = 17 if c < W else 13
+        ws.column_dimensions[L(c)].width = _COLW.get(c, 17 if c < W else 13)
     row = [1]
 
     def put(r, c, v, span=1, font=None, fill=None, border=True, h=None, align=CEN, box=None):
@@ -316,7 +328,8 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             bc.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True, readingOrder=2)
             for rr_ in range(r_rel, r_end + 1):
                 ws.cell(rr_, 1).border = BOX
-            ws.column_dimensions[L(1)].width = 30
+            if not _COLW:
+                ws.column_dimensions[L(1)].width = 30
         if b["radd"] and "ratio" in b["radd"]:
             rd = b["radd"]
             lines.append(f"رد: ما بقیہ {rd['R']} اور من یرد علیہم {rd['S_r']} میں {rd['ratio']['name']} ⇒ "
@@ -387,4 +400,136 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
     ws.page_margins.left = ws.page_margins.right = 0.4
     ws.page_margins.top = ws.page_margins.bottom = 0.4
     wb.save(path)
+    return path
+
+
+# ---------------------------------------------------------------------------
+# خود کار سائز: کالم کی چوڑائی اور قطار کی اونچائی اندر کے الفاظ کے مطابق
+# ---------------------------------------------------------------------------
+import math
+import re as _re
+
+
+def _cw(ch, sz, bold):
+    """ایک حرف کی اندازاً چوڑائی (پکسل)۔"""
+    em = 0.28 if ch == " " else (0.58 if ch.isdigit() else 0.52)
+    return em * sz * 1.333 * (1.08 if bold else 1.0)
+
+
+def _tw(text, sz, bold):
+    return sum(_cw(ch, sz, bold) for ch in text if ch not in "\u202a\u202b\u202c\u200e\u200f")
+
+
+def _cell_lines(cell):
+    """سیل کی سطریں: [(سطر کی چوڑائی پکسل، حرف کا سائز)]۔ چھوٹے حروف والی سطروں کے بیچ کی خالی جگہ گنی نہیں جاتی۔"""
+    v = cell.value
+    if v is None:
+        return []
+    out = []
+    if isinstance(v, CellRichText):
+        for part in v:
+            if isinstance(part, TextBlock):
+                sz = part.font.sz or 11
+                bold = bool(part.font.b)
+                txt = part.text
+            else:
+                sz, bold, txt = (cell.font.sz or 11), False, str(part)
+            for ln in txt.split("\n"):
+                if not ln.strip() and ln != txt.split("\n")[-1]:
+                    continue
+                pcs = [x for x in _re.split(r" {3,}", ln.strip()) if x.strip()]
+                if not pcs:
+                    continue
+                out.append((sum(_tw(x.strip(), sz, bold) for x in pcs) + (14 if len(pcs) > 1 else 0), sz))
+    else:
+        sz = cell.font.sz or 11
+        bold = bool(cell.font.b)
+        for ln in str(v).split("\n"):
+            out.append((_tw(ln, sz, bold), sz))
+    return out
+
+
+def autofit(wb, small_cap=125):
+    """ہر کالم کی چوڑائی اس کے سب سے لمبے متن کے مطابق، اور ہر قطار کی اونچائی اس کی سطروں کے مطابق۔
+    پورے نقشے پر پھیلی (ضم شدہ) سطریں چوڑائی طے نہیں کرتیں؛ وہ لپٹ کر اپنی اونچائی لیتی ہیں۔"""
+    ws = wb.active
+    maxc, maxr = ws.max_column, ws.max_row
+    merged = {}
+    covered = set()
+    for mr in ws.merged_cells.ranges:
+        merged[(mr.min_row, mr.min_col)] = mr
+        for r in range(mr.min_row, mr.max_row + 1):
+            for c in range(mr.min_col, mr.max_col + 1):
+                if (r, c) != (mr.min_row, mr.min_col):
+                    covered.add((r, c))
+    colpx = {c: 60.0 for c in range(1, maxc + 1)}
+    for (r, c), mr in merged.items():
+        pass
+    for r in range(1, maxr + 1):
+        for c in range(1, maxc + 1):
+            if (r, c) in covered:
+                continue
+            mr = merged.get((r, c))
+            if mr is not None and mr.max_col > mr.min_col:
+                continue                                    # افقی ضم شدہ: چوڑائی طے نہیں کرتا
+            cell = ws.cell(r, c)
+            lines = _cell_lines(cell)
+            if not lines:
+                continue
+            need = max((min(w, small_cap) if sz < 10 else w) for w, sz in lines) + 16
+            colpx[c] = max(colpx[c], need)
+    for c, px in colpx.items():
+        ws.column_dimensions[L(c)].width = round((px - 5) / 7, 1)
+    # قطاروں کی اونچائی
+    need_rows = {}
+    for r in range(1, maxr + 1):
+        best = 0.0
+        for c in range(1, maxc + 1):
+            if (r, c) in covered:
+                continue
+            mr = merged.get((r, c))
+            if mr is not None and mr.max_row > mr.min_row:
+                continue                                    # عمودی ضم شدہ: نیچے الگ دیکھتے ہیں
+            cell = ws.cell(r, c)
+            lines = _cell_lines(cell)
+            if not lines:
+                continue
+            span_px = sum(colpx[cc] for cc in range(c, (mr.max_col if mr else c) + 1)) - 12
+            wrap = bool(cell.alignment and cell.alignment.wrap_text)
+            h = 6.0
+            for w, sz in lines:
+                n = max(1, math.ceil(w / span_px)) if wrap else 1
+                h += n * sz * 1.5
+            best = max(best, h)
+        if best:
+            need_rows[r] = max(best, 18.0)
+            ws.row_dimensions[r].height = round(need_rows[r], 1)
+    for (r, c), mr in merged.items():                           # عمودی ضم شدہ خانے
+        if mr.max_row == mr.min_row:
+            continue
+        lines = _cell_lines(ws.cell(r, c))
+        span_px = sum(colpx[cc] for cc in range(mr.min_col, mr.max_col + 1)) - 12
+        h = 8.0 + sum(max(1, math.ceil(w / span_px)) * sz * 1.5 for w, sz in lines)
+        have = sum((ws.row_dimensions[rr].height or 15) for rr in range(mr.min_row, mr.max_row + 1))
+        if have < h:
+            last = mr.max_row
+            ws.row_dimensions[last].height = round((ws.row_dimensions[last].height or 15) + (h - have), 1)
+    return {c: round((px - 5) / 7, 1) for c, px in colpx.items()}
+
+
+def build_xlsx(case, res, path, lang=None, amounts=None, fit=True):
+    """پہلی بار عام ناپ سے بنا کر کالم کی چوڑائیاں نکالتا ہے، پھر انہی چوڑائیوں پر دوبارہ بناتا ہے
+    (تاکہ عدد بیچ میں رہیں)، اور آخر میں قطاروں کی اونچائی متن کے مطابق لگاتا ہے۔"""
+    global _COLW
+    _COLW = {}
+    _build_xlsx(case, res, path, lang, amounts)
+    if not fit:
+        return path
+    wb = load_workbook(path, rich_text=True)
+    _COLW = autofit(wb)
+    _build_xlsx(case, res, path, lang, amounts)
+    wb = load_workbook(path, rich_text=True)
+    autofit(wb)
+    wb.save(path)
+    _COLW = {}
     return path
