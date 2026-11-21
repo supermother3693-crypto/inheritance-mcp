@@ -73,7 +73,7 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
             v = cell.value
             if isinstance(v, CellRichText):
                 text = ""
-                corner = bool(al and al.horizontal == "right") and any(
+                corner = bool(al and al.horizontal == "right" and al.vertical == "top") and any(
                     isinstance(x, TextBlock) and getattr(x.font, "vertAlign", None) != "superscript" for x in v)
                 for part in v:
                     if corner and isinstance(part, TextBlock):

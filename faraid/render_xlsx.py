@@ -54,6 +54,16 @@ def batan_name(i):
 
 SMALL = InlineFont(rFont="Arial", sz=8, b=False, color="555555")
 BIGF = InlineFont(rFont="Arial", sz=14, b=True)
+BLUE = InlineFont(rFont="Arial", sz=8, b=True, color="1F4E9C")          # "محفوظ n" کا عنوان
+BOXB = InlineFont(rFont="Arial", sz=9, b=True, color="1F4E9C")          # تصحیح خانے کا نیلا عنوان
+BOXN = InlineFont(rFont="Arial", sz=9, b=False, color="333333")
+_WAFQ = {2: "بالنصف", 3: "بالثلث", 4: "بالربع", 5: "بالخمس", 6: "بالسدس", 7: "بالسبع", 8: "بالثمن", 9: "بالتسع", 10: "بالعشر"}
+
+
+def tawafuq_name(g):
+    """توافق کا مکمل نام: مشترک عدد 2 → بالنصف، 3 → بالثلث ... اس سے اوپر → بجزء من n۔"""
+    return "توافق " + (_WAFQ[g] if g in _WAFQ else f"بجزء من {g}")
+
 
 
 def _wpx(text, per=4.8):
@@ -73,9 +83,9 @@ def ratio_kind(st):
         return "تباین", st["reduced"], ""
     if S < u and u % S == 0:
         return "تداخل", st["reduced"], f"دخل {u // S}"
-    return "توافق", st["reduced"], f"وفق {S // (u // st['reduced'])}"
+    return tawafuq_name(u // st["reduced"]), st["reduced"], f"وفق {S // (u // st['reduced'])}"
 
-def corner_val(small, big, c, span, cw=10.4, small_left=""):
+def corner_val(small, big, c, span, cw=10.4, small_left="", blue=""):
     """اصول: اصل عدد خانے کے عین بیچ میں؛ چھوٹا حساب اسی خانے میں دائیں اوپر کے کونے میں،
     اور دخل/وفق (small_left) بائیں اوپر کے کونے میں۔ c = منطقی کالم (1 = دائیں، تنگ)، span = کالم۔
     خالی جگہیں دونوں طرف برابر ڈالی جاتی ہیں تاکہ ایکسل کی سمت جو بھی ہو، عدد بیچ میں رہے۔"""
@@ -86,6 +96,9 @@ def corner_val(small, big, c, span, cw=10.4, small_left=""):
         n = max(2, int((px - 10 - _wpx(small) - _wpx(small_left)) / 2.96))
         line = small + " " * n + small_left
     first = ("\u202b" + line + "\u202c\n") if line else ""                      # RTL ترتیب: پہلا دائیں، آخری بائیں
+    if blue:                                                                    # نیلی سطر: "محفوظ n"
+        return CellRichText(TextBlock(SMALL, first), TextBlock(BLUE, "\u202b" + blue + "\u202c\n"),
+                            TextBlock(BIGF, " " * p + str(big) + " " * p))
     return CellRichText(TextBlock(SMALL, first), TextBlock(BIGF, " " * p + str(big) + " " * p))
 
 
@@ -207,11 +220,16 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                 gi_of[h["id"]] = gi
         # --- رشتہ / نام ---
         r_rel, r_nm, r_kind, r_S = nxt(), nxt(), nxt(), nxt()
+        r_end = r_S
+        tasheeh_box = None
         for ci, h in enumerate(cols):
             put(r_rel, 1 + ci, rel_label(h["rel"], lang), 1, F(11), h=22)
             put(r_nm, 1 + ci, h["name"], 1, F(12), h=34)
         # گروہ کی ضم شدہ لکیریں؛ سہام اور رؤوس کی نسبت اسی خانے میں چھوٹے حروف میں
         tkey = {st["key"]: st for st in b["tsteps"]}
+        # کسر والے وہ طائفے جن کا محفوظ عدد بنتا ہے (تماثل / رؤوس کا سہام پر پورا تقسیم ہونا: کچھ نہیں لکھتے)
+        n_kasr = sum(1 for g2 in b["groups"] if tkey.get(g2["key"]) and tkey[g2["key"]]["u"] > 1
+                     and ratio_kind(tkey[g2["key"]])[1] > 1)
         any_note = False
         c = 1
         for g in b["groups"]:
@@ -223,16 +241,22 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
             corner = False
             if st and st["u"] > 1:
                 kind, m, left = ratio_kind(st)
-                note = f"{{رؤوس ⤴{st['u']}}} {kind} {{سہام ⤵{st['S']}}}  مضـ {m}"
-                val = corner_val(note, g["S"], c, span, small_left=left)
-                corner = True
-                any_note = True
+                if m > 1:
+                    note = f"{{رؤوس ⤴{st['u']}}} {kind} {{سہام ⤵{st['S']}}}"
+                    if n_kasr > 1:
+                        left = ""          # کئی طائفوں میں کسر: دخل/وفق نہیں، صرف محفوظ عدد
+                    elif left.startswith("وفق"):
+                        left = f"⤴وفق {m}  ⤵{left}"      # ایک ہی طائفہ: رؤوس اور سہام دونوں کا وفق
+                    val = corner_val(note, g["S"], c, span, small_left=left, blue=f"محفوظ {m}")
+                    corner = True
+                    any_note = True
             put(r_S, c, val, span, F(12), h=22, align=CORNER if corner else CEN)
             c += span
         if any_note:
-            ws.row_dimensions[r_S].height = 36
+            ws.row_dimensions[r_S].height = 48
         if b["mudrub"] > 1:
             r_fr = nxt()
+            r_end = r_fr
             c = 1
             for g in b["groups"]:
                 span = len(g["members"])
@@ -258,37 +282,41 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
         # --- نوٹس / وضاحت ---
         lines = []
         if b["tsteps"]:
-            # تصحیح: مکسور فریقوں کے عدد محفوظہ، پھر فریقوں کی اپنی ترتیب سے ایک ایک کر کے مقابلہ
             tk_ = {t["key"]: t for t in b["tsteps"]}
             nums = [ts_["reduced"] for g in b["groups"] if (ts_ := tk_.get(g["key"])) and ts_["reduced"] > 1]
-            parts = []
             if len(nums) > 1:
-                ords = ["اوّل", "ثانی", "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "عاشر"]
-                parts.append("مکسور: " + " · ".join(f"{ords[i] if i < len(ords) else i + 1} {n}" for i, n in enumerate(nums)))
-                parts.append("")
+                # کئی طائفوں میں کسر: محفوظات کا باہمی مقابلہ، بائیں کالم میں (جہاں بطنوں کے مضروب لکھتے ہیں)
+                from math import gcd as _g
+                rows_t = []
                 acc = nums[0]
-                left = f"{ords[0]} {acc}"
-                for i, v in enumerate(nums[1:], 1):
-                    last = i == len(nums) - 1
-                    from math import gcd as _g
+                for v in nums[1:]:
                     g_ = _g(acc, v)
                     if acc == v:
                         kind, work, new = "تماثل", "", acc
                     elif acc % v == 0:
-                        kind, work, new = "تداخل", f"دخل {acc // v}", acc
+                        kind, work, new = "تداخل", "", acc
                     elif v % acc == 0:
-                        kind, work, new = "تداخل", f"دخل {v // acc}", v
+                        kind, work, new = "تداخل", "", v
                     elif g_ == 1:
-                        kind, work, new = "تباین", f"{acc} × {v}", acc * v
+                        kind, work, new = "تباین", "", acc * v
                     else:
-                        kind, work, new = "توافق", f"وفق {v // g_} × {acc}", acc * (v // g_)
-                    tail = ("مضـ " if last else "محفوظ ") + str(new)
-                    parts.append(f"{{{left}}} {kind} {{{ords[i] if i < len(ords) else i + 1} {v}}}  " + (work + "  " if work else "") + tail)
+                        # توافق: ایک عدد کا وفق × دوسرے کا پورا عدد
+                        kind, work, new = tawafuq_name(g_), f"وفق {v // g_} × {acc}", acc * (v // g_)
+                    rows_t.append(f"{acc} اور {v}: {kind}" + (f"، {work}" if work else "") + f"  ←  {new}")
                     acc = new
-                    left = f"محفوظ {acc}"
-                parts.append("")
-            parts.append(f"\u200e{b['asl']} × {b['mudrub']} = {b['T']}")
-            lines.append("تصحیح:\n" + "\n".join(parts))
+                head = " > ".join(str(n) for n in nums)
+                body = "\n" + "\n".join(rows_t) + "\n" + f"\u200e{b['asl']} × {b['mudrub']} = {b['T']}"
+                tasheeh_box = CellRichText(TextBlock(BOXB, "محفوظات: "), TextBlock(BOXN, head + body))
+            else:
+                lines.append(f"تصحیح:  \u202a{b['asl']} × {b['mudrub']} = {b['T']}\u202c")
+        if tasheeh_box is not None:
+            ws.merge_cells(start_row=r_rel, start_column=1, end_row=r_end, end_column=1)
+            bc = ws.cell(r_rel, 1)
+            bc.value = tasheeh_box
+            bc.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True, readingOrder=2)
+            for rr_ in range(r_rel, r_end + 1):
+                ws.cell(rr_, 1).border = BOX
+            ws.column_dimensions[L(1)].width = 30
         if b["radd"] and "ratio" in b["radd"]:
             rd = b["radd"]
             lines.append(f"رد: ما بقیہ {rd['R']} اور من یرد علیہم {rd['S_r']} میں {rd['ratio']['name']} ⇒ "
