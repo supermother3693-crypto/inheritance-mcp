@@ -247,7 +247,7 @@ def build_xlsx(case, res, path, lang=None, amounts=None):
                         left = ""          # کئی طائفوں میں کسر: دخل/وفق نہیں، صرف محفوظ عدد
                     elif left.startswith("وفق"):
                         left = f"⤴وفق {m}  ⤵{left}"      # ایک ہی طائفہ: رؤوس اور سہام دونوں کا وفق
-                    val = corner_val(note, g["S"], c, span, small_left=left, blue=f"محفوظ {m}")
+                    val = corner_val(note, g["S"], c, span, small_left=left, blue=(f"محفوظ {m}" if n_kasr > 1 else ""))
                     corner = True
                     any_note = True
             put(r_S, c, val, span, F(12), h=22, align=CORNER if corner else CEN)
