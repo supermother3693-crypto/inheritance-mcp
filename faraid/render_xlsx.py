@@ -166,15 +166,13 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
         if i and b["fJ"] > 1:
             facs.append((i, b["fJ"]))
             vals.append(vals[-1] * b["fJ"])
-    for k in range(len(vals) - 1, -1, -1):
-        if len(blocks) == 1:          # ایک ہی بطن: اوپر کا عدد دہرانا نہیں (وہی بطن کے خانے میں ہے)
+    for k in range(len(vals) - 1, 0, -1):     # سب سے نچلا عدد (بطن اول کی تصحیح) بطن کے اپنے خانے میں ہے، یہاں نہیں دہرانا
+        if len(blocks) == 1:
             break
         r = nxt()
-        has_f = k < len(facs) and k < len(vals) - 1
         put(r, 1, vals[k], 1, F(14), FILL_B, h=22)
-        if has_f:   # ضرب کے ساتھ مختصر وجہ: کس بطن کی وجہ سے (ایک ہی لائن میں)
-            put(r, W, f"× {facs[k][1]} / {batan_name(facs[k][0])}", 1, F(10, False, "555555"), border=False, align=NOWRAP)
-    if len(blocks) > 1:
+        put(r, W, f"{vals[k-1]} × {facs[k-1][1]} / {batan_name(facs[k-1][0])}", 1, F(10, False, "555555"), border=False, align=NOWRAP)
+    if len(blocks) > 1 and len(vals) > 1:
         nxt()
 
     people = res["people"]
@@ -219,9 +217,13 @@ def _build_xlsx(case, res, path, lang=None, amounts=None):
                     h=34, align=CORNER)
             else:
                 put(r, 2, left_big, used - 2, F(12), FILL_B, h=28)
-        if calc or right_small:
+        single = len(blocks) == 1      # ایک ہی بطن: کل عدد دوبارہ نہیں لکھنا (بطن کے خانے/تصحیح کے خانے میں موجود ہے)
+        if (calc or right_small) and not single:
             put(r, 1, corner_val(calc, b["T"], 1, 1, small_left="  ".join(right_small)), 1, F(12), h=34, align=CORNER)
-        put(r, used, batan_name(bi), W - used + 1, F(12), FILL_B, h=28)
+        if single:
+            put(r, 1, batan_name(bi), W, F(12), FILL_B, h=28)
+        else:
+            put(r, used, batan_name(bi), W - used + 1, F(12), FILL_B, h=28)
         # سطر 2: عنوان
         r = nxt()
         put(r, 1, asl_txt, 1, F(13), FILL_T, h=28)
