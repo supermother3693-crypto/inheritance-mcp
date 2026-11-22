@@ -79,6 +79,18 @@ def themed_html(xlsx_path: str, title: str = "", theme: str = "navy",
               .replace("border:1px solid #444", f"border:1px solid {c['main']}"))
         return s
     h = re.sub(r"<td[^>]*>", td_fix, h)
+    # کتابی انداز: خانوں کی لکیریں ہٹا کر ہر لفظ/عدد کے اوپر اسی کی لمبائی کے برابر سنہری لکیر
+    h = h.replace(f"border:1px solid {c['main']}", "border:0")
+    def wrap(m):
+        inner = m.group(2)
+        if not re.sub(r"<[^>]*>", "", inner).strip() or "display:block" in inner or "display:flex" in inner or "<br>" in inner:
+            return m.group(0)
+        return f'{m.group(1)}<span class="ln">{inner}</span></td>'
+    h = re.sub(r"(<td[^>]*>)(.*?)</td>", wrap, h, flags=re.S)
+    h = h.replace("</style>", f"""  .ln {{ display: inline-block; border-top: 1px solid {c['gold']}; padding: .1em .45em 0; line-height: 1.55; }}
+  td[style*="background:{c['main']}"] {{ box-shadow: inset 0 0 0 1.5px {c['gold']}, inset 0 0 0 4px {c['main']}, inset 0 0 0 5px {c['gold']}; }}
+  td[style*="background:{c['main']}"] .ln {{ border-top-color: {c['gold_lt']}; }}
+</style>""", 1)
     # فونٹ، صفحہ، فریم
     h = h.replace('<style>', f"""<style>
   @font-face {{ font-family: "JNN"; src: url("{font_url}"); }}
@@ -88,7 +100,7 @@ def themed_html(xlsx_path: str, title: str = "", theme: str = "navy",
 """, 1)
     h = re.sub(r"@page \{[^}]*\}", f"@page {{ size: A4 {'landscape' if landscape else 'portrait'}; margin: 0; }}", h)
     tw = int(re.search(r"width: (\d+)px; margin: 0 auto", h).group(1))
-    h = re.sub(r"table \{ zoom: [^;]*;", f"table {{ zoom: {min(1.0, (inner_px - 4) / tw):.3f} !important;", h)
+    h = re.sub(r"table \{ zoom: [^;]*;", f"table {{ zoom: {min(1.2, (inner_px - 4) / tw):.3f} !important;", h)
     h = h.replace("<body>", "<body>" + frame_svg(pw, ph, c), 1)
     # ہر صفحے پر فریم کے اندر جگہ: دہرائی جانے والی thead/tfoot خالی پٹیاں
     pad = "16.5mm"
