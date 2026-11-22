@@ -32,14 +32,37 @@ def _star(cx, cy, r, c, points=8, inner=0.58):
             f'<circle cx="{cx}" cy="{cy}" r="{r * 0.17:.2f}" fill="{c["gold_lt"]}"/>')
 
 
+def _mix(a, b, t):
+    pa = [int(a[i:i + 2], 16) for i in (1, 3, 5)]
+    pb = [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(pa, pb))
+
+
+def make_theme(main, petal, edge, bg):
+    """رنگین پھولوں والا بارڈر: پنکھڑی، کنارے اور صفحے کے ہلکے رنگ سے پورا تھیم۔"""
+    return dict(main=main, gold=edge, gold_lt=_mix(petal, "#ffffff", .5), ivory="#ffffff", flower=True, flat=True,
+                petal=petal, bg=bg, tint_a=_mix(bg, edge, .12), tint_b=_mix(bg, edge, .24),
+                cream=_mix(bg, edge, .12), pink="#fbdcdc", ink=_mix(main, "#000000", .55))
+
+
+THEMES.update({
+    "rose":    make_theme("#8c2b52", "#f48fb1", "#c2185b", "#fff5f7"),
+    "teal":    make_theme("#0e6f6a", "#5fd3c6", "#0f8f87", "#f2fbf8"),
+    "purple":  make_theme("#5b3a8c", "#b79be0", "#7e57c2", "#f7f3fd"),
+    "orange":  make_theme("#a65a0a", "#ffb74d", "#e08a12", "#fffaf0"),
+    "blue":    make_theme("#1f4f9c", "#7fb2ff", "#3a7bd5", "#f2f7ff"),
+    "crimson": make_theme("#8b1a1a", "#ef9a9a", "#c62828", "#fff4f2"),
+})
+
+
 def _flower(cx, cy, r, c, points=8, inner=0):
     """آٹھ پنکھڑیوں کا پھول: کریم پنکھڑیاں، سنہری کنارہ، بیچ میں سنہری گول۔"""
     out = []
     for i in range(8):
         a = i * 45
         out.append(f'<ellipse cx="{cx:.2f}" cy="{cy - r * 0.58:.2f}" rx="{r * 0.36:.2f}" ry="{r * 0.46:.2f}" '
-                   f'transform="rotate({a} {cx:.2f} {cy:.2f})" fill="#f6ecc9" stroke="{c["gold"]}" stroke-width="0.25"/>')
-    out.append(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r * 0.3:.2f}" fill="{c["gold"]}" stroke="#f6ecc9" stroke-width="0.25"/>')
+                   f'transform="rotate({a} {cx:.2f} {cy:.2f})" fill="{c.get("petal", "#f6ecc9")}" stroke="{c["gold"]}" stroke-width="0.25"/>')
+    out.append(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r * 0.3:.2f}" fill="{c["gold"]}" stroke="#ffffff" stroke-width="0.25"/>')
     out.append(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r * 0.12:.2f}" fill="{c["main"]}"/>')
     return "".join(out)
 
@@ -49,7 +72,8 @@ def frame_svg(pw, ph, c, margin=5, band=11):
     ix0, iy0, ix1, iy1 = margin + band, margin + band, pw - margin - band, ph - margin - band
     iw, ih, mid = ix1 - ix0, iy1 - iy0, band / 2
     _star_ = _flower if c.get("flower") else _star
-    P = [f'<path fill-rule="evenodd" fill="{c["main"]}" d="M{ox0} {oy0}H{ox1}V{oy1}H{ox0}Z M{ix0} {iy0}V{iy1}H{ix1}V{iy0}Z"/>',
+    P = [f'<rect x="0" y="0" width="{pw}" height="{ph}" fill="{c.get("bg", "#ffffff")}"/>',
+         f'<path fill-rule="evenodd" fill="{c["main"]}" d="M{ox0} {oy0}H{ox1}V{oy1}H{ox0}Z M{ix0} {iy0}V{iy1}H{ix1}V{iy0}Z"/>',
          f'<rect x="{ox0+.9}" y="{oy0+.9}" width="{ox1-ox0-1.8}" height="{oy1-oy0-1.8}" fill="none" stroke="{c["gold"]}" stroke-width="0.35"/>',
          f'<rect x="{ix0-.9}" y="{iy0-.9}" width="{iw+1.8}" height="{ih+1.8}" fill="none" stroke="{c["gold"]}" stroke-width="0.35"/>',
          f'<rect x="{ix0}" y="{iy0}" width="{iw}" height="{ih}" fill="none" stroke="{c["gold_lt"]}" stroke-width="0.6"/>']
