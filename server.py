@@ -121,6 +121,14 @@ async def logo(_: Request) -> FileResponse:
     return FileResponse(Path(__file__).parent / "static" / "logo.png", media_type="image/png")
 
 
+@mcp.custom_route("/font/jameel.ttf", methods=["GET"])
+async def font_jameel(_: Request) -> FileResponse:
+    """جمیل نوری نستعلیق: نقشے کے صفحے کا فونٹ۔ عوامی، کیش ہو سکتا ہے؛ نہ ملے تو صفحہ اپنے فونٹ پر چلتا ہے۔"""
+    p = Path(__file__).parent / "static" / "fonts" / "JameelNooriNastaleeq-Regular.ttf"
+    return FileResponse(p, media_type="font/ttf", headers={
+        "Cache-Control": "public, max-age=31536000, immutable", "Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/files/{token}/{name}", methods=["GET"])
 async def download(request: Request):
     path = find(request.path_params["token"], request.path_params["name"])

@@ -17,7 +17,7 @@ from faraid.engine import FaraidError, solve_block, solve_case
 from faraid.parser import parse_text
 from faraid.relations import INFO, ORDER
 from faraid.render_xlsx import build_xlsx
-from files import new_bundle
+from files import new_bundle, base_url
 from naqsha import sheet_to_html
 
 DISCLAIMER = (
@@ -117,7 +117,7 @@ def make_files(case: dict, res: dict, lang: str, distributable: F | None) -> dic
     xlsx = folder / "faraid_naqsha.xlsx"
     build_xlsx(case, res, str(xlsx), lang, amounts)
     page = folder / "faraid_naqsha.html"
-    page.write_text(sheet_to_html(str(xlsx), case.get("title", "")), encoding="utf-8")
+    page.write_text(sheet_to_html(str(xlsx), case.get("title", ""), font_url=base_url() + "/font/jameel.ttf"), encoding="utf-8")
     out: dict[str, Any] = {
         "excel_url": url(xlsx.name),
         "naqsha_page_url": url(page.name),

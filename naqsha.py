@@ -22,7 +22,7 @@ def _rgb(color) -> str | None:
     return None
 
 
-def sheet_to_html(xlsx_path: str, title: str = "") -> str:
+def sheet_to_html(xlsx_path: str, title: str = "", font_url: str | None = None) -> str:
     wb = load_workbook(xlsx_path, rich_text=True)
     ws = wb.active
     max_r, max_c = ws.max_row, ws.max_column
@@ -108,10 +108,41 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
             tds.append(f'<td{attrs} style="{";".join(st)}">{text}</td>')
         rows_html.append(f'<tr style="height:{h:.0f}pt">{"".join(tds)}</tr>')
 
+    html = _page(ws, rows_html, cols, total_w, title, font_url)
+    return html
+
+
+def _page(ws, rows_html, cols, total_w, title, font_url):
     landscape = ws.page_setup.orientation == "landscape"
     page_px = 1050 if landscape else 740
     zoom = min(1.0, page_px / total_w)
     page_title = escape(title or "نقشۂ تقسیمِ سہام")
+    BL = "#1a73ff"
+
+    def rus_row(r):
+        # رؤوس/سہام والے خانے کے اوپر چمکدار نیلی لکیر؛ ہر خانے میں کناروں سے ذرا پہلے ختم (ساتھ والے طائفوں سے الگ نظر آئے)
+        def td(m):
+            t = m.group(0)
+            if "رؤوس" in t and "display:block" in t:
+                t = re.sub(r'(<td[^>]*style="[^"]*)(")', r'\1;background-image:linear-gradient(' + BL + ',' + BL + r');background-repeat:no-repeat;background-size:calc(100% - 14px) 1.8px;background-position:center top\2', t, 1)
+                t = re.sub(r'(<span style="[^"]*)("[^>]*>\{[^<]*رؤوس)', r'\1;color:' + BL + r'\2', t)
+            return t
+        return re.sub(r"<td[^>]*>.*?</td>", td, r, flags=re.S)
+
+    rows_html = [rus_row(r) for r in rows_html]
+
+    # ہر بطن (نام، رؤوس، تصحیح سب) ایک ہی صفحے پر مکمل؛ نہ سمائے تو پورا اگلے صفحے پر
+    def txt(r):
+        return re.sub(r"<[^>]*>", "", r).strip()
+    starts = [i for i, r in enumerate(rows_html)
+              if re.match(r"<tr [^>]*><td[^>]*background:", r) and txt(r).startswith("بطن")]
+    tail = next((i for i, r in enumerate(rows_html) if txt(r).startswith("وارثوں کے کل")), len(rows_html))
+    if starts:
+        cuts = sorted(set(starts + [tail]))
+        groups = [rows_html[:cuts[0]]] + [rows_html[a:b] for a, b in zip(cuts, cuts[1:] + [len(rows_html)])]
+        rows_html = [f'<tbody class="blk">{"".join(g)}</tbody>' for g in groups if g]
+    font_face = f'@font-face {{ font-family: "JNN"; src: url("{font_url}"); font-display: swap; }}' if font_url else ""
+    font_stack = ('"JNN", ' if font_url else "") + FONT
     return f"""<!doctype html>
 <html lang="ur" dir="rtl">
 <head>
@@ -119,7 +150,9 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=6">
 <title>{page_title}</title>
 <style>
-  body {{ margin: 0; font-family: {FONT}; background: #fff; }}
+  {font_face}
+  body {{ margin: 0; font-family: {font_stack}; background: #fff; }}
+  tbody.blk {{ break-inside: avoid; page-break-inside: avoid; }}
   .bar {{ position: sticky; top: 0; z-index: 2; background: #1f3b64; color: #fff; padding: 4px 10px;
           display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }}
   .bar button {{ font: inherit; padding: 3px 12px; border: 0; border-radius: 6px; font-size: 15px; background: #fff; color: #1f3b64;
@@ -140,7 +173,7 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 </head>
 <body>
 <div class="bar">
-  <button onclick="window.print()" title="PDF محفوظ کریں / پرنٹ (کھلنے والی ونڈو میں Save as PDF چنیں)">⤓ PDF</button>
+  <button onclick="printWhenReady()" title="PDF محفوظ کریں / پرنٹ (کھلنے والی ونڈو میں Save as PDF چنیں)">⤓ PDF</button>
   <button onclick="zoomBy(1.2)" aria-label="بڑا کریں">＋</button>
   <button onclick="zoomBy(1/1.2)" aria-label="چھوٹا کریں">－</button>
   <button onclick="fit()" title="پوری چوڑائی" aria-label="پوری چوڑائی">⤢</button>
@@ -151,6 +184,11 @@ def sheet_to_html(xlsx_path: str, title: str = "") -> str:
 </table>
 </div>
 <script>
+// فونٹ سرور سے آ جائے تو نیا فونٹ، نہ آئے (سرور بند/سست) تو فون کا اپنا فونٹ؛ پرنٹ سے پہلے فونٹ کا انتظار (زیادہ سے زیادہ 6 سیکنڈ)
+function printWhenReady() {{
+  const t = new Promise(r => setTimeout(r, 6000));
+  Promise.race([document.fonts ? document.fonts.ready : Promise.resolve(), t]).then(() => window.print());
+}}
 const tb = document.querySelector('table');
 let z = 1;
 function setZ(v) {{ z = Math.max(0.15, Math.min(4, v)); tb.style.zoom = z; }}
