@@ -127,6 +127,21 @@ def themed_html(xlsx_path: str, title: str = "", theme: str = "navy",
     tw = int(re.search(r"width: (\d+)px; margin: 0 auto", h).group(1))
     h = re.sub(r"table \{ zoom: [^;]*;", f"table {{ zoom: {min(1.2, (inner_px - 4) / tw):.3f} !important;", h)
     h = h.replace("<body>", "<body>" + frame_svg(pw, ph, c), 1)
+    # ہر بطن (نام، رؤوس، تصحیح، سب کچھ) ایک ہی صفحے پر مکمل رہے؛ نہ سمائے تو پورا اگلے صفحے پر
+    m = re.search(r"(<table><colgroup>.*?</colgroup>)(.*?)(</table>)", h, flags=re.S)
+    if m:
+        rows = re.findall(r"<tr .*?</tr>", m.group(2), flags=re.S)
+        def txt(r):
+            return re.sub(r"<[^>]*>", "", r).strip()
+        starts = [i for i, r in enumerate(rows)
+                  if re.match(r"<tr [^>]*><td[^>]*background:" + re.escape(c['cream']), r) and txt(r).startswith("بطن")]
+        tail = next((i for i, r in enumerate(rows) if txt(r).startswith("وارثوں کے کل")), len(rows))
+        if starts:
+            cuts = sorted(set(starts + [tail]))
+            groups = [rows[:cuts[0]]] + [rows[a_:b_] for a_, b_ in zip(cuts, cuts[1:] + [len(rows)])]
+            body = "".join(f'<tbody class="blk">{"".join(g)}</tbody>' for g in groups if g)
+            h = h[:m.start(2)] + body + h[m.end(2):]
+            h = h.replace("</style>", "  tbody.blk { break-inside: avoid; page-break-inside: avoid; }\n</style>", 1)
     # ہر صفحے پر فریم کے اندر جگہ: دہرائی جانے والی thead/tfoot خالی پٹیاں
     pad = "16.5mm"
     h = h.replace('<div class="wrap">', f'<table class="pg" style="width:100%;border:0"><thead><tr><td style="height:{pad};border:0;padding:0"></td></tr></thead>'
