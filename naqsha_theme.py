@@ -102,7 +102,7 @@ def themed_html(xlsx_path: str, title: str = "", theme: str = "navy",
     def rus_td(m):
         t = m.group(0)
         if "رؤوس" in t and "display:block" in t:
-            t = re.sub(r'(<td[^>]*style="[^"]*)(")', r'\1;border-top:1.6px solid ' + BL + r' !important\2', t, 1)
+            t = re.sub(r'(<td[^>]*style="[^"]*)(")', r'\1;background-image:linear-gradient(' + BL + ',' + BL + r');background-repeat:no-repeat;background-size:calc(100% - 14px) 1.8px;background-position:center top\2', t, 1)
             t = re.sub(r'(<span style="[^"]*)("[^>]*>\{[^<]*رؤوس)', r'\1;color:' + BL + r'\2', t)
         return t
     h = re.sub(r"<td[^>]*>.*?</td>", rus_td, h, flags=re.S)
