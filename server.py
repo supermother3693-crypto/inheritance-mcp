@@ -246,6 +246,14 @@ def calculate_munasakha(
         بیوی: سارہ
         بیٹا: بکر
 
+    BEFORE writing each block from the 2nd on, look back at every earlier block: anyone who was an
+    heir there, has not died yet and is still alive must be listed here too, with the relation to THIS
+    block's deceased (a "wife" above becomes "mother" here, a "son" becomes "brother", a "daughter"
+    becomes "sister"; a husband above becomes "father"). Forgetting the living mother/father/brother/
+    sister changes every share. The result may contain `ai_recheck_warning` (never printed in the
+    naqsha): if it lists someone who is alive, fix case_text and call again. You can first call with
+    create_naqsha = false to read the warning, then call again with true.
+
     Rules: each block starts with `مورث:` (or `مورثہ:` for a woman); the deceased of
     the 2nd block and later must be a heir named in an earlier block; two different
     people with the same name are written `نام#نشانی`. Relation words: بیوی، شوہر،
