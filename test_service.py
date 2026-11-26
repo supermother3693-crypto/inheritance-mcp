@@ -93,16 +93,3 @@ assert any(v == "بطن اول" for v in vals) and any(v == "بطن ثانی" fo
 assert any("رحمہ" in v or "نوّر" in v for v in vals)
 assert any(c.fill.fgColor.rgb.endswith("FFD6D6") for r in ws.iter_rows() for c in r if c.fill.fill_type == "solid")
 print("OK  naqsha format upgrades")
-
-# Living-heir recheck warning: only for the AI, never inside the naqsha files
-miss = ("مورث: احمد | جنس: مرد\nبیوی: فاطمہ\nبیٹا: زید\n\n"
-        "مورث: زید\nبیوی: سارہ\nبیٹا: بکر\n")
-r = solve_munasakha(miss, make_naqsha=True)
-w = r["ai_recheck_warning"]
-assert w["recheck_required"] and w["per_batan"][0]["most_likely_missing"][0]["name"] == "فاطمہ"
-assert w["per_batan"][0]["most_likely_missing"][0]["likely_now"] == "ماں"
-wb = openpyxl.load_workbook(served(r["files"]["excel_url"]), rich_text=True).active
-assert not any("RECHECK" in str(c.value) or "recheck" in str(c.value).lower() for row in wb.iter_rows() for c in row if c.value)
-fixed = miss.replace("بیوی: سارہ", "بیوی: سارہ\nماں: فاطمہ")
-assert "ai_recheck_warning" not in solve_munasakha(fixed, make_naqsha=False), "no warning once the mother is listed"
-print("OK  living-heir recheck warning")

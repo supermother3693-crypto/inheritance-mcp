@@ -18,7 +18,6 @@ from faraid.parser import parse_text
 from faraid.relations import INFO, ORDER
 from faraid.render_xlsx import build_xlsx
 from files import new_bundle, base_url
-from faraid.review import build_warning
 from naqsha import sheet_to_html
 
 DISCLAIMER = (
@@ -253,10 +252,6 @@ def solve_munasakha(text: str, estate: float = 0, funeral_expenses: float = 0,
         "disclaimer": DISCLAIMER,
         "not_covered": NOT_COVERED,
     }
-    # AI کے لیے انتباہ (نقشے میں نہیں چھپتا): کیا کوئی زندہ وارث کسی بطن میں رہ گیا؟
-    warn = build_warning(case)
-    if warn:
-        out["ai_recheck_warning"] = warn
     if make_naqsha:
         out["files"] = make_files(case, res, case.get("lang", "ur"), distributable if estate else None)
     return out
